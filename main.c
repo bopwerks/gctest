@@ -6,7 +6,7 @@
 
 #define NELEM(a) (sizeof(a)/sizeof(a[0]))
 
-enum { MAXLEN = 20 };
+enum { MAXLEN = 120 };
 
 enum Type { NUM, CONS };
 typedef enum Type Type;
@@ -54,6 +54,7 @@ void print(int32_t ptr);
 int32_t seq(int32_t start, int32_t end);
 int32_t sum(int32_t list);
 int32_t filter(int32_t (*fn)(int32_t), int32_t lst);
+int32_t rfilter(int32_t (*fn)(int32_t), int32_t lst);
 int32_t read(FILE *fp);
 
 enum { MAXVARS = 32 };
@@ -129,6 +130,10 @@ main(void)
     /* a = seq(num(1), num(2)); */
     a = read(stdin);
     print(a);
+    for (c = 0; c < 100; ++c) {
+        b = rfilter(evenp, a);
+        print(b);
+    }
     /* print(a); */
     /* printstats(); */
     /* a = seq(num(1), num(2)); */
@@ -156,12 +161,43 @@ int32_t
 filter(int32_t (*fn)(int32_t), int32_t lst)
 {
     assert(type(lst) == CONS);
-    if (nullp(lst))
+    if (nullp(lst) == T)
         return NIL;
     else if (fn(car(lst)) == T)
         return cons(car(lst), filter(fn, cdr(lst)));
     else
         return filter(fn, cdr(lst));
+}
+
+int32_t
+atomp(int32_t obj)
+{
+    if (type(obj) != CONS)
+        return T;
+    return NIL;
+}
+
+int32_t
+listp(int32_t obj)
+{
+    if (type(obj) == CONS)
+        return T;
+    return NIL;
+}
+
+int32_t
+rfilter(int32_t (*fn)(int32_t), int32_t lst)
+{
+    assert(type(lst) == CONS);
+    if (nullp(lst) == T)
+        return NIL;
+    if (atomp(car(lst)) == T) {
+        if (fn(car(lst)) == T)
+            return cons(car(lst), rfilter(fn, cdr(lst)));
+        return rfilter(fn, cdr(lst));
+    }
+    return cons(rfilter(fn, car(lst)),
+                rfilter(fn, cdr(lst)));
 }
 
 void
@@ -297,9 +333,9 @@ mark(int32_t ptr)
     printf("MARKED\n");
     if (type(ptr) != CONS)
         return;
-    if (!nullp(car(ptr)))
+    if (nullp(car(ptr)) != T)
         mark(car(ptr));
-    if (!nullp(cdr(ptr)))
+    if (nullp(cdr(ptr)) != T)
         mark(cdr(ptr));
 }
 
@@ -372,7 +408,9 @@ eql(int32_t a, int32_t b)
 int32_t
 nullp(int32_t ptr)
 {
-    return ptr == NIL;
+    if (ptr == NIL)
+        return T;
+    return NIL;
 }
 
 int32_t
@@ -380,7 +418,7 @@ lremove(int32_t num, int32_t lst)
 {
     assert(type(num) == NUM);
     assert(type(lst) == CONS);
-    if (nullp(lst))
+    if (nullp(lst) == T)
         return NIL;
     else if (eql(num, car(lst)) == T)
         return lremove(num, cdr(lst));
@@ -409,7 +447,7 @@ int32_t
 sum(int32_t list)
 {
     assert(type(list) == CONS);
-    if (nullp(list))
+    if (nullp(list) == T)
         return num(0);
     return num(val(car(list)) + val(sum(cdr(list))));
 }
