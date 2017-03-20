@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -5,7 +6,7 @@
 
 #define NELEM(a) (sizeof(a)/sizeof(a[0]))
 
-enum { MAXLEN = 10 };
+enum { MAXLEN = 20 };
 
 enum Type { NUM, CONS };
 typedef enum Type Type;
@@ -53,10 +54,50 @@ void print(int32_t ptr);
 int32_t seq(int32_t start, int32_t end);
 int32_t sum(int32_t list);
 int32_t filter(int32_t (*fn)(int32_t), int32_t lst);
+int32_t read(FILE *fp);
 
 enum { MAXVARS = 32 };
 static int32_t *vars[MAXVARS];
 static int32_t nvars = 0;
+
+int32_t
+readlist(FILE *fp)
+{
+    int ch;
+
+    ch = fgetc(fp);
+    if (ch == EOF || ch == ')')
+        return NIL;
+    ungetc(ch, fp);
+    return cons(read(fp), readlist(fp));
+}
+
+int32_t
+read(FILE *fp)
+{
+    int ch;
+    int i, j;
+    int32_t root;
+    int32_t elt;
+    assert(fp != NULL);
+    ch = fgetc(fp);
+    while (isspace(ch))
+        ch = fgetc(fp);
+    if (ch == EOF)
+        return NIL;
+    if (isdigit(ch)) {
+        j = ch - '0';
+        while ((ch = fgetc(fp)) != EOF && isdigit(ch))
+            j = j*10 + (ch - '0');
+        ungetc(ch, fp);
+        return num(j);
+    }
+    if (ch == '(') {
+        return readlist(fp);
+    }
+    ungetc(ch, fp);
+    return NIL;
+}
 
 void
 printstats(void)
@@ -85,14 +126,16 @@ main(void)
     /* a = seq(num(1), num(5)); */
     /* print(a); */
     printstats();
-    a = seq(num(1), num(2));
+    /* a = seq(num(1), num(2)); */
+    a = read(stdin);
     print(a);
-    printstats();
-    a = seq(num(1), num(2));
-    print(a);
-    printstats();
-    gc();
-    printstats();
+    /* print(a); */
+    /* printstats(); */
+    /* a = seq(num(1), num(2)); */
+    /* print(a); */
+    /* printstats(); */
+    /* gc(); */
+    /* printstats(); */
     /* regvar(&b); */
     /* regvar(&c); */
     /* a = seq(num(1), num(500)); */
