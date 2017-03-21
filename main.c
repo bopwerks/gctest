@@ -1,3 +1,4 @@
+#include <string.h>
 #include <ctype.h>
 #include <assert.h>
 #include <stdint.h>
@@ -8,12 +9,15 @@
 
 enum { MAXLEN = 120 };
 
-enum Type { NUM, CONS };
+enum Type { NUM, CONS, SYM };
 typedef enum Type Type;
+
+static int32_t NIL;
+static int32_t T;
 
 enum { FALSE, TRUE };
 
-enum { NIL = -1, T = 1010101 };
+/* enum { NIL = -1, T = 1010101 }; */
 
 struct Cell {
     union {
@@ -22,6 +26,7 @@ struct Cell {
             int32_t cdr;
         } cons;
         int64_t num;
+        int64_t sym;
     };
     Type type;
     char marked;
@@ -31,6 +36,10 @@ typedef struct Cell Cell;
 static Cell pool[MAXLEN];
 static int32_t avail = 0;
 static int32_t navail = MAXLEN;
+
+static char **symbols;
+static uint32_t nsymbols;
+static uint32_t maxsymbols;
 
 void initpool(void);
 void regvar(int32_t *p);
@@ -56,62 +65,42 @@ int32_t sum(int32_t list);
 int32_t filter(int32_t (*fn)(int32_t), int32_t lst);
 int32_t rfilter(int32_t (*fn)(int32_t), int32_t lst);
 int32_t read(FILE *fp);
+int32_t readlist(FILE *fp);
+void printstats(void);
+int32_t evenp(int32_t obj);
+int32_t sym(char *s);
 
 enum { MAXVARS = 32 };
 static int32_t *vars[MAXVARS];
 static int32_t nvars = 0;
 
-int32_t
-readlist(FILE *fp)
+int
+initsym(void)
 {
-    int ch;
-
-    ch = fgetc(fp);
-    if (ch == EOF || ch == ')')
-        return NIL;
-    ungetc(ch, fp);
-    return cons(read(fp), readlist(fp));
+    symbols = malloc(sizeof *symbols * 1);
+    if (symbols == NULL)
+        return 0;
+    nsymbols = 0;
+    maxsymbols = 1;
+    return 1;
 }
 
-int32_t
-read(FILE *fp)
+uint32_t
+addsym(char *s)
 {
-    int ch;
-    int i, j;
-    int32_t root;
-    int32_t elt;
-    assert(fp != NULL);
-    ch = fgetc(fp);
-    while (isspace(ch))
-        ch = fgetc(fp);
-    if (ch == EOF)
-        return NIL;
-    if (isdigit(ch)) {
-        j = ch - '0';
-        while ((ch = fgetc(fp)) != EOF && isdigit(ch))
-            j = j*10 + (ch - '0');
-        ungetc(ch, fp);
-        return num(j);
+    char **tmp;
+    if (nsymbols == maxsymbols) {
+        tmp = realloc(symbols, sizeof(*symbols) * maxsymbols * 2);
+        if (tmp == NULL)
+            return NIL;
+        symbols = tmp;
+        maxsymbols *= 2;
     }
-    if (ch == '(') {
-        return readlist(fp);
-    }
-    ungetc(ch, fp);
-    return NIL;
-}
-
-void
-printstats(void)
-{
-    printf("Used %d Free %d Total %d\n",
-           MAXLEN-navail, navail, MAXLEN);
-}
-
-int32_t
-evenp(int32_t obj)
-{
-    assert(type(obj) == NUM);
-    return ((val(obj) % 2) == 0) ? T : NIL;
+    symbols[nsymbols] = malloc(strlen(s)+1);
+    if (symbols[nsymbols] == NULL)
+        return NIL;
+    strcpy(symbols[nsymbols++], s);
+    return nsymbols;
 }
 
 int
@@ -121,19 +110,23 @@ main(void)
     int32_t b;
     int32_t c;
     initpool();
-    a = b = c = NIL;
+    initsym();
+    NIL = sym("nil");
+    T = sym("t");
+    regvar(&NIL);
+    regvar(&T);
     regvar(&a);
-    /* printstats(); */
+    printstats();
     /* a = seq(num(1), num(5)); */
     /* print(a); */
-    printstats();
+    /* printstats(); */
     /* a = seq(num(1), num(2)); */
     a = read(stdin);
     print(a);
-    for (c = 0; c < 100; ++c) {
-        b = rfilter(evenp, a);
-        print(b);
-    }
+    /* for (c = 0; c < 100; ++c) { */
+    /*     b = rfilter(evenp, a); */
+    /*     print(b); */
+    /* } */
     /* print(a); */
     /* printstats(); */
     /* a = seq(num(1), num(2)); */
@@ -155,6 +148,105 @@ main(void)
     /* print(lremove(num(5), b)); */
     /* print(sum(b)); */
     return EXIT_SUCCESS;
+}
+
+void
+printstats(void)
+{
+    printf("Used %d Free %d Total %d\n",
+           MAXLEN-navail, navail, MAXLEN);
+}
+
+int32_t
+evenp(int32_t obj)
+{
+    assert(type(obj) == NUM);
+    return ((val(obj) % 2) == 0) ? T : NIL;
+}
+
+int32_t
+readlist(FILE *fp)
+{
+    int ch;
+    int32_t car;
+    int32_t cdr;
+
+    ch = fgetc(fp);
+    /* printf("readlist(): starting on char '%c'\n", ch); */
+    assert(ch != EOF);
+    if (ch == ')') {
+        ungetc(ch, fp);
+        return NIL;
+    }
+    printf("Consing ");
+    car = read(fp);
+    cdr = readlist(fp);
+    printf("Consing ");
+    print(car);
+    printf(" onto ");
+    print(cdr);
+    putchar('\n');
+    return cons(car, cdr);
+}
+
+int32_t
+read(FILE *fp)
+{
+    char buf[128];
+    int ch;
+    int i, j;
+    int32_t root;
+    int32_t elt;
+    assert(fp != NULL);
+    ch = fgetc(fp);
+    /* printf("Starting on char '%c'\n", ch); */
+    while (isspace(ch))
+        ch = fgetc(fp);
+    if (ch == EOF)
+        return NIL;
+    if (isdigit(ch)) {
+        j = ch - '0';
+        while ((ch = fgetc(fp)) != EOF && isdigit(ch))
+            j = j*10 + (ch - '0');
+        ungetc(ch, fp);
+        return num(j);
+    }
+    if (isalpha(ch)) {
+        i = 0;
+        buf[i++] = ch;
+        for ( ; i < sizeof(buf)-1 && (ch = fgetc(fp)) != EOF && isalnum(ch); ++i)
+            buf[i] = ch;
+        buf[i] = '\0';
+        if (i == sizeof(buf)) {
+            while (ch != EOF && isalnum(ch))
+                ch = fgetc(fp);
+        }
+        ungetc(ch, fp);
+        root = sym(buf);
+        printf("Returning symbol cell %d @ '%s\n", root, buf);
+        return root;
+    }
+    if (ch == '(') {
+        printf("Reading list\n");
+        root = readlist(fp);
+        printf("Returning list @ cell %d\n", root);
+        assert(fgetc(fp) == ')');
+        return root;
+    }
+    ungetc(ch, fp);
+    return NIL;
+}
+
+int32_t
+sym(char *s)
+{
+    int32_t ptr;
+    ptr = getcell();
+    assert(ptr != -1);
+    printf("Allocating symbol cell %d @ '%s\n", ptr, s);
+    pool[ptr].type = SYM;
+    pool[ptr].sym = addsym(s);
+    return ptr;
 }
 
 int32_t
@@ -212,7 +304,7 @@ initpool(void)
     }
     pool[i].type = CONS;
     pool[i].cons.car = 0;
-    pool[i].cons.cdr = NIL;
+    pool[i].cons.cdr = -1;
     pool[i].marked = FALSE;
     avail = 0;
     navail = MAXLEN;
@@ -240,8 +332,8 @@ int32_t
 getcell(void)
 {
     int32_t ptr;
-    if (avail == NIL && !gc())
-        return NIL;
+    if (avail == -1 && !gc())
+        return -1;
     ptr = avail;
     avail = pool[ptr].cons.cdr;
     pool[ptr].cons.car = 0;
@@ -256,8 +348,7 @@ cons(int32_t a, int32_t b)
 {
     int32_t ptr;
     ptr = getcell();
-    if (ptr == NIL)
-        return NIL;
+    assert(ptr != -1);
     pool[ptr].cons.car = a;
     pool[ptr].cons.cdr = b;
     printf("Allocating cons cell %d @ ", ptr);
@@ -270,8 +361,7 @@ num(int64_t n)
 {
     int32_t ptr;
     ptr = getcell();
-    if (ptr == NIL)
-        return NIL;
+    assert(ptr != -1);
     printf("Allocating number cell %d @ %lld\n", ptr, n);
     pool[ptr].type = NUM;
     pool[ptr].num = n;
@@ -281,7 +371,7 @@ num(int64_t n)
 Type
 type(int32_t ptr)
 {
-    if (ptr == NIL)
+    if (eql(ptr, NIL))
         return CONS;
     return pool[ptr].type;
 }
@@ -344,7 +434,7 @@ sweep(void)
 {
     int32_t i;
     int32_t nmarked;
-    avail = NIL;
+    avail = -1;
     puts("Sweeping...");
     for (i = nmarked = 0; i < NELEM(pool); ++i) {
         if (!pool[i].marked) {
@@ -362,28 +452,44 @@ sweep(void)
     return navail;
 }
 
+char *
+getsym(int32_t ptr)
+{
+    assert(type(ptr) == SYM);
+    return symbols[pool[ptr].sym];
+}
+
 void
 printrec(int32_t ptr)
 {
-    if (ptr == NIL) {
-        printf("()");
-        return;
+    switch (type(ptr)) {
+        case SYM:
+            printf("%s", getsym(ptr));
+            return;
+        case NUM:
+            printf("%lld", val(ptr));
+            return;
+        default:
+            break;
     }
-    if (ptr == T) {
-        printf("T");
-        return;
-    }
-    if (type(ptr) == NUM) {
-        printf("%lld", val(ptr));
-        return;
-    }
+    /* if (ptr == NIL) { */
+    /*     printf("()"); */
+    /*     return; */
+    /* } */
+    /* if (ptr == T) { */
+    /*     printf("T"); */
+    /*     return; */
+    /* } */
+    /* if (type(ptr) == NUM) { */
+    /*     return; */
+    /* } */
     putchar('(');
     printrec(car(ptr));
     if (type(cdr(ptr)) == NUM) {
         printf(" . ");
         printrec(cdr(ptr));
     }
-    for (ptr = cdr(ptr); ptr != NIL && type(ptr) == CONS; ptr = cdr(ptr)) {
+    for (ptr = cdr(ptr); !eql(ptr, NIL) && type(ptr) == CONS; ptr = cdr(ptr)) {
         putchar(' ');
         printrec(car(ptr));
     }
@@ -400,6 +506,11 @@ eql(int32_t a, int32_t b)
             return T;
         return NIL;
     }
+    if (type(a) == SYM) {
+        if (strcmp(getsym(a), getsym(b)) == 0)
+            return T;
+        return NIL;
+    }
     if (a == b)
         return T;
     return NIL;
@@ -408,7 +519,7 @@ eql(int32_t a, int32_t b)
 int32_t
 nullp(int32_t ptr)
 {
-    if (ptr == NIL)
+    if (eql(ptr, NIL))
         return T;
     return NIL;
 }
