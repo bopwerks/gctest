@@ -52,7 +52,7 @@ static int NINDENT = 0;
 
 #define NELEM(a) (sizeof(a)/sizeof(a[0]))
 
-enum { MAXLEN = 1024 };
+enum { MAXLEN = 10000 };
 
 enum Type { NUM, CONS, SYM };
 typedef enum Type Type;
@@ -220,25 +220,29 @@ main(void)
   NIL = sym("nil");
   T = sym("t");
   env = cons(cons(NIL, NIL), cons(cons(T, T), NIL));
-  print(env);
+  /* print(env); */
   regvar(&NIL);
   regvar(&T);
   regvar(&a);
   regvar(&b);
   regvar(&c);
   regvar(&expr);
-  print(length(env));
+  /* print(length(env)); */
   a = cons(sym("a"), cons(sym("b"), cons(sym("c"), NIL)));
   b = cons(num(1), cons(num(2), cons(num(3), NIL)));
-  print(a);
+  /* print(a); */
   c = map2(cons, a, b);
-  print(b);
-  print(assoc(sym("b"), c));
-  print(append(a, b));
+  /* print(b); */
+  /* print(assoc(sym("b"), c)); */
+  /* print(append(a, b)); */
   env = cons(cons(sym("x"), num(72)), env);
   initread(stdin);
   while ((expr = read(stdin)) != EOF) {
-    print(eval(expr, &env));
+    expr = eval(expr, &env);
+    if (expr != NIL)
+      print(expr);
+    /* printf("Env after eval: "); */
+    /* print(env); */
   }
   /* print(eval(sym("dang6"), env)); */
   /* print(second(map2(cons, a, b))); */
@@ -307,9 +311,15 @@ assoc(int32_t key, int32_t alist)
 {
   TRACE();
   assert(listp(alist) == T);
-  for ( ; nullp(alist) != T; alist = cdr(alist))
+  for ( ; nullp(alist) != T; alist = cdr(alist)) {
+    /* printf("Comparing "); */
+    /* printrec(car(car(alist))); */
+    /* printf(" and "); */
+    /* printrec(key); */
+    /* putchar('\n'); */
     if (eql(car(car(alist)), key))
       RETURN(alist);
+  }
   RETURN(NIL);
 }
 
@@ -327,10 +337,14 @@ eval(int32_t expr, int32_t *env)
   int32_t rval;
   int32_t func;
   int32_t pair;
+  /* printf("eval env = "); */
+  /* print(*env); */
   if (expr == NIL || expr == T)
     return expr;
   if (symbolp(expr) == T) {
     rval = assoc(expr, *env);
+    /* printf("assoc on symbol: "); */
+    /* print(rval); */
     if (rval == NIL) {
       fprintf(stderr, "Error: Undefined symbol: %s\n", getsym(expr));
       return NIL;
@@ -342,11 +356,17 @@ eval(int32_t expr, int32_t *env)
   if (eql(first(expr), sym("quote")))
     RETURN(second(expr));
   if (eql(first(expr), sym("nullp")))
-    RETURN(nullp(second(expr)));
+    RETURN(nullp(eval(second(expr), env)));
   if (eql(first(expr), sym("atomp")))
-    RETURN(atomp(second(expr)));
+    RETURN(atomp(eval(second(expr), env)));
   if (eql(first(expr), sym("lambda")))
     RETURN(expr);
+  if (eql(first(expr), sym("cons")))
+    RETURN(cons(eval(second(expr), env), eval(third(expr), env)));
+  if (eql(first(expr), sym("car")))
+    RETURN(car(eval(second(expr), env)));
+  if (eql(first(expr), sym("cdr")))
+    RETURN(cdr(eval(second(expr), env)));
   if (eql(first(expr), sym(">")))
     RETURN(bool(val(eval(second(expr), env)) > val(eval(third(expr), env))));
   if (eql(first(expr), sym(">=")))
@@ -393,7 +413,7 @@ eval(int32_t expr, int32_t *env)
   if (eql(first(expr), sym("define"))) {
     assert(cdr(expr) != NIL);
     *env = cons(cons(second(expr), eval(third(expr), env)), *env);
-    RETURN(third(expr));
+    RETURN(NIL);
   }
   func = assoc(first(expr), *env);
   if (func == NIL) {
@@ -410,21 +430,21 @@ apply(int32_t lambda, int32_t params, int32_t env)
   int32_t frame;
   int32_t pair;
   int32_t rval;
-  printf("apply(): lambda = ");
-  print(lambda);
-  printf("second(lambda) = ");
-  print(second(lambda));
-  printf("params = ");
-  print(params);
+  /* printf("apply(): lambda = "); */
+  /* print(lambda); */
+  /* printf("second(lambda) = "); */
+  /* print(second(lambda)); */
+  /* printf("params = "); */
+  /* print(params); */
   assert(eql(length(second(lambda)), length(params)));
   /* push the values onto the environment alist as a stack */
   env = append(map2(cons, second(lambda), mapenv(eval, params, env)), env);
-  printf("new env = ");
-  print(env);
+  /* printf("new env = "); */
+  /* print(env); */
   assert(val(length(lambda)) >= 3);
   for (pair = cdr(cdr(lambda)); pair != NIL; pair = cdr(pair)) {
-    printf("evaluating ");
-    print(car(pair));
+    /* printf("evaluating "); */
+    /* print(car(pair)); */
     rval = eval(car(pair), &env);
   }
   return rval;
@@ -528,9 +548,9 @@ read(FILE *fp)
   }
   if (peek == '(') {
     peek = fgetc(fp);
-    printf("Reading list\n");
+    /* printf("Reading list\n"); */
     root = readlist(fp);
-    printf("Returning list @ cell %d\n", root);
+    /* printf("Returning list @ cell %d\n", root); */
     assert(peek == ')');
     peek = fgetc(fp);
     RETURN(root);
@@ -545,8 +565,12 @@ read(FILE *fp)
       while (peek != EOF && isalnum(peek))
         peek = fgetc(fp);
     }
+    if (strcmp(buf, "nil") == 0)
+      RETURN(NIL);
+    if (strcmp(buf, "t") == 0)
+      RETURN(T);
     root = sym(buf);
-    printf("Returning symbol cell %d @ '%s\n", root, buf);
+    /* printf("Returning symbol cell %d @ '%s\n", root, buf); */
     RETURN(root);
   }
   RETURN(NIL);
@@ -675,7 +699,7 @@ cons(int32_t a, int32_t b)
   pool[ptr].cons.car = a;
   pool[ptr].cons.cdr = b;
   LOG("Allocating cons cell %d\n", ptr);
-  print(ptr);
+  /* print(ptr); */
   return ptr;
 }
 
@@ -836,18 +860,24 @@ eql(int32_t a, int32_t b)
   TRACE();
   if (a == b)
     RETURN(T);
-  if (type(a) != type(b))
+  if (type(a) != type(b)) {
+    /* puts("Returning NIL because types differ"); */
+    /* printf("Type A = %d B = %d\n", type(a), type(b)); */
     RETURN(NIL);
+  }
   if (type(a) == NUM) {
     if (val(a) == val(b))
       RETURN(T);
+    /* puts("Returning NIL because numeric values differ"); */
     RETURN(NIL);
   }
   if (type(a) == SYM) {
     if (strcmp(getsym(a), getsym(b)) == 0)
       RETURN(T);
+    /* puts("Returning NIL because symbols don't match"); */
     return NIL;
   }
+  /* puts("Returning NIL because something else"); */
   RETURN(NIL);
 }
 

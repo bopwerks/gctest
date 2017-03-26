@@ -16,3 +16,12 @@
           (* n (fact (- n 1))))))
 
 (fact 6)
+
+(define map
+    (lambda (fn list)
+      (if (nullp list)
+          nil
+          (cons (fn (car list))
+                (map fn (cdr list))))))
+
+(map fact (quote (4 5 6)))
