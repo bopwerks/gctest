@@ -367,6 +367,8 @@ eval(int32_t expr, int32_t *env)
     RETURN(car(eval(second(expr), env)));
   if (eql(first(expr), sym("cdr")))
     RETURN(cdr(eval(second(expr), env)));
+  if (eql(first(expr), sym("eql")))
+    RETURN(eql(eval(second(expr), env), eval(third(expr), env)));
   if (eql(first(expr), sym(">")))
     RETURN(bool(val(eval(second(expr), env)) > val(eval(third(expr), env))));
   if (eql(first(expr), sym(">=")))

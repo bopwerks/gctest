@@ -25,3 +25,12 @@
                 (map fn (cdr list))))))
 
 (map fact (quote (4 5 6)))
+
+(define member
+    (lambda (elt list)
+      (if (nullp list)
+          nil
+          (or (eql elt (car list))
+              (member elt (cdr list))))))
+
+(member 5 (quote (4 5 6)))
