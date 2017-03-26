@@ -337,22 +337,25 @@ eval(int32_t expr, int32_t *env)
   int32_t rval;
   int32_t func;
   int32_t pair;
+  TRACE();
   /* printf("eval env = "); */
   /* print(*env); */
   if (expr == NIL || expr == T)
-    return expr;
+    RETURN(expr);
   if (symbolp(expr) == T) {
     rval = assoc(expr, *env);
     /* printf("assoc on symbol: "); */
     /* print(rval); */
     if (rval == NIL) {
       fprintf(stderr, "Error: Undefined symbol: %s\n", getsym(expr));
-      return NIL;
+      RETURN(NIL);
     }
-    return cdr(car(rval));
+    RETURN(cdr(car(rval)));
   }
   if (atomp(expr) == T)
     RETURN(expr);
+  if (eql(first(expr), sym("env")))
+    RETURN(*env);
   if (eql(first(expr), sym("quote")))
     RETURN(second(expr));
   if (eql(first(expr), sym("nullp")))
