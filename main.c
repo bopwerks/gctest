@@ -128,6 +128,7 @@ int32_t assoc(int32_t key, int32_t alist);
 int32_t append(int32_t list1, int32_t list2);
 int32_t first(int32_t list);
 int32_t second(int32_t list);
+int32_t third(int32_t list);
 
 enum { MAXVARS = 32 };
 static int32_t *vars[MAXVARS];
@@ -178,6 +179,15 @@ int32_t
 pair(int32_t a, int32_t b)
 {
   return cons(a, b);
+}
+
+int32_t
+third(int32_t list)
+{
+  assert(listp(list) == T);
+  assert(cdr(list) != NIL);
+  assert(cdr(cdr(list)) != NIL);
+  return car(cdr(cdr(list)));
 }
 
 int32_t
@@ -300,9 +310,19 @@ assoc(int32_t key, int32_t alist)
 }
 
 int32_t
+bool(int val)
+{
+  if (val == 0)
+    return NIL;
+  return T;
+}
+
+int32_t
 eval(int32_t expr, int32_t env)
 {
   int32_t rval;
+  int32_t func;
+  int32_t pair;
   if (expr == NIL || expr == T)
     return expr;
   if (symbolp(expr) == T) {
@@ -314,10 +334,59 @@ eval(int32_t expr, int32_t env)
     return cdr(car(rval));
   }
   if (atomp(expr) == T)
-    return expr;
+    RETURN(expr);
   if (eql(first(expr), sym("quote")))
-    return second(expr);
-  return NIL;
+    RETURN(second(expr));
+  if (eql(first(expr), sym("nullp")))
+    RETURN(nullp(second(expr)));
+  if (eql(first(expr), sym("atomp")))
+    RETURN(atomp(second(expr)));
+  if (eql(first(expr), sym("lambda")))
+    RETURN(expr);
+  if (eql(first(expr), sym(">")))
+    RETURN(bool(val(second(expr)) > val(third(expr))));
+  if (eql(first(expr), sym(">=")))
+    RETURN(bool(val(second(expr)) >= val(third(expr))));
+  if (eql(first(expr), sym("<")))
+    RETURN(bool(val(second(expr)) < val(third(expr))));
+  if (eql(first(expr), sym("<=")))
+    RETURN(bool(val(second(expr)) <= val(third(expr))));
+  if (eql(first(expr), sym("=")))
+    RETURN(bool(val(second(expr)) == val(third(expr))));
+  if (eql(first(expr), sym("or"))) {
+    assert(cdr(expr) != NIL);
+    for (pair = cdr(expr); pair != NIL; pair = cdr(pair))
+      if (eval(car(pair), env) == T)
+        RETURN(T);
+    RETURN(NIL);
+  }
+  if (eql(first(expr), sym("and"))) {
+    assert(cdr(expr) != NIL);
+    for (pair = cdr(expr); pair != NIL; pair = cdr(pair))
+      if (eval(car(pair), env) == NIL)
+        RETURN(NIL);
+    RETURN(T);
+  }
+  if (eql(first(expr), sym("not"))) {
+    assert(cdr(expr) != NIL);
+    if (eval(second(expr), env) == NIL)
+      RETURN(T);
+    RETURN(NIL);
+  }
+  if (eql(first(expr), sym("if"))) {
+    assert(cdr(expr) != NIL);
+    if (eval(second(expr), env) == T)
+      RETURN(eval(third(expr), env));
+    else
+      RETURN(eval(car(cdr(cdr(cdr(expr)))), env));
+  }
+  func = assoc(first(expr), env);
+  if (func == NIL) {
+    fprintf(stderr, "Error: Undefined function: %s\n", getsym(first(expr)));
+    return NIL;
+  }
+  return apply(func, second(expr), env);
+  RETURN(NIL);
 }
 
 int32_t
@@ -437,6 +506,7 @@ read(FILE *fp)
     root = readlist(fp);
     printf("Returning list @ cell %d\n", root);
     assert(peek == ')');
+    peek = fgetc(fp);
     RETURN(root);
   }
   if (isgraph(peek)) {
