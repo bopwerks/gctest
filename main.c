@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifndef NDEBUG
+#ifdef NDEBUG
 
 static int NINDENT = 0;
 
@@ -52,7 +52,7 @@ static int NINDENT = 0;
 
 #define NELEM(a) (sizeof(a)/sizeof(a[0]))
 
-enum { MAXLEN = 128 };
+enum { MAXLEN = 1024 };
 
 enum Type { NUM, CONS, SYM };
 typedef enum Type Type;
@@ -117,8 +117,8 @@ int32_t sym(char *s);
 int32_t length(int32_t list);
 int32_t map1(int32_t (*fn)(int32_t), int32_t list);
 int32_t map2(int32_t (*fn)(int32_t, int32_t), int32_t list1, int32_t list2);
-int32_t mapenv(int32_t (*fn)(int32_t t, int32_t e), int32_t list, int32_t env);
-int32_t eval(int32_t expr, int32_t env);
+int32_t mapenv(int32_t (*fn)(int32_t t, int32_t *e), int32_t list, int32_t env);
+int32_t eval(int32_t expr, int32_t *env);
 int32_t apply(int32_t lambda, int32_t params, int32_t env);
 int32_t listp(int32_t obj);
 int32_t symbolp(int32_t obj);
@@ -213,6 +213,7 @@ main(void)
   int32_t b;
   int32_t c;
   int32_t env;
+  int32_t expr;
   TRACE();
   initpool();
   initsym();
@@ -225,6 +226,7 @@ main(void)
   regvar(&a);
   regvar(&b);
   regvar(&c);
+  regvar(&expr);
   print(length(env));
   a = cons(sym("a"), cons(sym("b"), cons(sym("c"), NIL)));
   b = cons(num(1), cons(num(2), cons(num(3), NIL)));
@@ -235,7 +237,9 @@ main(void)
   print(append(a, b));
   env = cons(cons(sym("x"), num(72)), env);
   initread(stdin);
-  print(eval(read(stdin), env));
+  while ((expr = read(stdin)) != EOF) {
+    print(eval(expr, &env));
+  }
   /* print(eval(sym("dang6"), env)); */
   /* print(second(map2(cons, a, b))); */
   /* initread(stdin); */
@@ -289,13 +293,13 @@ append(int32_t list1, int32_t list2)
 }
 
 int32_t
-mapenv(int32_t (*fn)(int32_t t, int32_t e), int32_t list, int32_t env)
+mapenv(int32_t (*fn)(int32_t t, int32_t *e), int32_t list, int32_t env)
 {
   TRACE();
   assert(listp(list) == T);
   if (nullp(list) == T)
     RETURN(NIL);
-  RETURN(cons(fn(car(list), env), mapenv(fn, cdr(list), env)));
+  RETURN(cons(fn(car(list), &env), mapenv(fn, cdr(list), env)));
 }
 
 int32_t
@@ -318,7 +322,7 @@ bool(int val)
 }
 
 int32_t
-eval(int32_t expr, int32_t env)
+eval(int32_t expr, int32_t *env)
 {
   int32_t rval;
   int32_t func;
@@ -326,7 +330,7 @@ eval(int32_t expr, int32_t env)
   if (expr == NIL || expr == T)
     return expr;
   if (symbolp(expr) == T) {
-    rval = assoc(expr, env);
+    rval = assoc(expr, *env);
     if (rval == NIL) {
       fprintf(stderr, "Error: Undefined symbol: %s\n", getsym(expr));
       return NIL;
@@ -344,15 +348,21 @@ eval(int32_t expr, int32_t env)
   if (eql(first(expr), sym("lambda")))
     RETURN(expr);
   if (eql(first(expr), sym(">")))
-    RETURN(bool(val(second(expr)) > val(third(expr))));
+    RETURN(bool(val(eval(second(expr), env)) > val(eval(third(expr), env))));
   if (eql(first(expr), sym(">=")))
-    RETURN(bool(val(second(expr)) >= val(third(expr))));
+    RETURN(bool(val(eval(second(expr), env)) >= val(eval(third(expr), env))));
   if (eql(first(expr), sym("<")))
-    RETURN(bool(val(second(expr)) < val(third(expr))));
+    RETURN(bool(val(eval(second(expr), env)) < val(eval(third(expr), env))));
   if (eql(first(expr), sym("<=")))
-    RETURN(bool(val(second(expr)) <= val(third(expr))));
+    RETURN(bool(val(eval(second(expr), env)) <= val(eval(third(expr), env))));
   if (eql(first(expr), sym("=")))
-    RETURN(bool(val(second(expr)) == val(third(expr))));
+    RETURN(bool(val(eval(second(expr), env)) == val(eval(third(expr), env))));
+  if (eql(first(expr), sym("*")))
+    RETURN(num(val(eval(second(expr), env)) * val(eval(third(expr), env))));
+  if (eql(first(expr), sym("+")))
+    RETURN(num(val(eval(second(expr), env)) + val(eval(third(expr), env))));
+  if (eql(first(expr), sym("-")))
+    RETURN(num(val(eval(second(expr), env)) - val(eval(third(expr), env))));
   if (eql(first(expr), sym("or"))) {
     assert(cdr(expr) != NIL);
     for (pair = cdr(expr); pair != NIL; pair = cdr(pair))
@@ -380,12 +390,17 @@ eval(int32_t expr, int32_t env)
     else
       RETURN(eval(car(cdr(cdr(cdr(expr)))), env));
   }
-  func = assoc(first(expr), env);
+  if (eql(first(expr), sym("define"))) {
+    assert(cdr(expr) != NIL);
+    *env = cons(cons(second(expr), eval(third(expr), env)), *env);
+    RETURN(third(expr));
+  }
+  func = assoc(first(expr), *env);
   if (func == NIL) {
     fprintf(stderr, "Error: Undefined function: %s\n", getsym(first(expr)));
     return NIL;
   }
-  return apply(func, second(expr), env);
+  return apply(cdr(car(func)), cdr(expr), *env);
   RETURN(NIL);
 }
 
@@ -395,12 +410,23 @@ apply(int32_t lambda, int32_t params, int32_t env)
   int32_t frame;
   int32_t pair;
   int32_t rval;
+  printf("apply(): lambda = ");
+  print(lambda);
+  printf("second(lambda) = ");
+  print(second(lambda));
+  printf("params = ");
+  print(params);
   assert(eql(length(second(lambda)), length(params)));
   /* push the values onto the environment alist as a stack */
-  env = cons(map2(cons, second(lambda), mapenv(eval, params, env)), env);
+  env = append(map2(cons, second(lambda), mapenv(eval, params, env)), env);
+  printf("new env = ");
+  print(env);
   assert(val(length(lambda)) >= 3);
-  for (pair = cdr(cdr(lambda)); nullp(pair) != NIL; pair = cdr(pair))
-    rval = eval(car(pair), env);
+  for (pair = cdr(cdr(lambda)); pair != NIL; pair = cdr(pair)) {
+    printf("evaluating ");
+    print(car(pair));
+    rval = eval(car(pair), &env);
+  }
   return rval;
 }
 
@@ -491,7 +517,7 @@ read(FILE *fp)
     peek = fgetc(fp);
   if (peek == EOF) {
     LOG("Reached EOF\n");
-    RETURN(NIL);
+    RETURN(EOF);
   }
   if (isdigit(peek)) {
     j = peek - '0';
