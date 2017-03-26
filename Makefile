@@ -1,7 +1,5 @@
 SHELL = sh
-
-debug: CFLAGS=-DNDEBUG
-debug: gctest
+CFLAGS = 
 
 gctest: main.o
 	$(CC) -o $@ $^

@@ -114,6 +114,20 @@ int32_t readlist(FILE *fp);
 void printstats(void);
 int32_t evenp(int32_t obj);
 int32_t sym(char *s);
+int32_t length(int32_t list);
+int32_t map1(int32_t (*fn)(int32_t), int32_t list);
+int32_t map2(int32_t (*fn)(int32_t, int32_t), int32_t list1, int32_t list2);
+int32_t mapenv(int32_t (*fn)(int32_t t, int32_t e), int32_t list, int32_t env);
+int32_t eval(int32_t expr, int32_t env);
+int32_t apply(int32_t lambda, int32_t params, int32_t env);
+int32_t listp(int32_t obj);
+int32_t symbolp(int32_t obj);
+char * getsym(int32_t ptr);
+int32_t atomp(int32_t obj);
+int32_t assoc(int32_t key, int32_t alist);
+int32_t append(int32_t list1, int32_t list2);
+int32_t first(int32_t list);
+int32_t second(int32_t list);
 
 enum { MAXVARS = 32 };
 static int32_t *vars[MAXVARS];
@@ -160,28 +174,69 @@ addsym(char *s)
   RETURN(nsymbols++);
 }
 
+int32_t
+pair(int32_t a, int32_t b)
+{
+  return cons(a, b);
+}
+
+int32_t
+second(int32_t list)
+{
+  assert(listp(list) == T);
+  assert(cdr(list) != NIL);
+  return car(cdr(list));
+}
+
+int32_t
+first(int32_t list)
+{
+  assert(listp(list) == T);
+  assert(list != NIL);
+  return car(list);
+}
+
 int
 main(void)
 {
   int32_t a;
   int32_t b;
   int32_t c;
+  int32_t env;
   TRACE();
-  initread(stdin);
   initpool();
   initsym();
   NIL = sym("nil");
   T = sym("t");
+  env = cons(cons(NIL, NIL), cons(cons(T, T), NIL));
+  print(env);
   regvar(&NIL);
   regvar(&T);
   regvar(&a);
-  printstats();
+  regvar(&b);
+  regvar(&c);
+  print(length(env));
+  a = cons(sym("a"), cons(sym("b"), cons(sym("c"), NIL)));
+  b = cons(num(1), cons(num(2), cons(num(3), NIL)));
+  print(a);
+  c = map2(cons, a, b);
+  print(b);
+  print(assoc(sym("b"), c));
+  print(append(a, b));
+  env = cons(cons(sym("x"), num(72)), env);
+  initread(stdin);
+  print(eval(read(stdin), env));
+  /* print(eval(sym("dang6"), env)); */
+  /* print(second(map2(cons, a, b))); */
+  /* initread(stdin); */
+  /* regvar(&a); */
+  /* printstats(); */
   /* a = seq(num(1), num(5)); */
   /* print(a); */
   /* printstats(); */
   /* a = seq(num(1), num(2)); */
-  a = read(stdin);
-  print(a);
+  /* a = read(stdin); */
+  /* print(a); */
   /* for (c = 0; c < 100; ++c) { */
   /*     b = rfilter(evenp, a); */
   /*     print(b); */
@@ -207,6 +262,109 @@ main(void)
   /* print(lremove(num(5), b)); */
   /* print(sum(b)); */
   RETURN(EXIT_SUCCESS);
+}
+
+int32_t
+append(int32_t list1, int32_t list2)
+{
+  int32_t pair;
+  TRACE();
+  assert(listp(list1) == T);
+  assert(listp(list2) == T);
+  if (list1 == NIL)
+    RETURN(list2);
+  if (list2 == NIL)
+    RETURN(list1);
+  RETURN(cons(car(list1), append(cdr(list1), list2)));
+}
+
+int32_t
+mapenv(int32_t (*fn)(int32_t t, int32_t e), int32_t list, int32_t env)
+{
+  TRACE();
+  assert(listp(list) == T);
+  if (nullp(list) == T)
+    RETURN(NIL);
+  RETURN(cons(fn(car(list), env), mapenv(fn, cdr(list), env)));
+}
+
+int32_t
+assoc(int32_t key, int32_t alist)
+{
+  TRACE();
+  assert(listp(alist) == T);
+  for ( ; nullp(alist) != T; alist = cdr(alist))
+    if (eql(car(car(alist)), key))
+      RETURN(alist);
+  RETURN(NIL);
+}
+
+int32_t
+eval(int32_t expr, int32_t env)
+{
+  int32_t rval;
+  if (expr == NIL || expr == T)
+    return expr;
+  if (symbolp(expr) == T) {
+    rval = assoc(expr, env);
+    if (rval == NIL) {
+      fprintf(stderr, "Error: Undefined symbol: %s\n", getsym(expr));
+      return NIL;
+    }
+    return cdr(car(rval));
+  }
+  if (atomp(expr) == T)
+    return expr;
+  if (eql(first(expr), sym("quote")))
+    return second(expr);
+  return NIL;
+}
+
+int32_t
+apply(int32_t lambda, int32_t params, int32_t env)
+{
+  int32_t frame;
+  int32_t pair;
+  int32_t rval;
+  assert(eql(length(second(lambda)), length(params)));
+  /* push the values onto the environment alist as a stack */
+  env = cons(map2(cons, second(lambda), mapenv(eval, params, env)), env);
+  assert(val(length(lambda)) >= 3);
+  for (pair = cdr(cdr(lambda)); nullp(pair) != NIL; pair = cdr(pair))
+    rval = eval(car(pair), env);
+  return rval;
+}
+
+int32_t
+length(int32_t list)
+{
+  int32_t len;
+  int32_t elt;
+  TRACE();
+  assert(listp(list) == T);
+  for (len = 0; nullp(list) != T; ++len)
+    list = cdr(list);
+  RETURN(num(len));
+}
+
+int32_t
+map1(int32_t (*fn)(int32_t), int32_t list)
+{
+  int32_t elt;
+  if (nullp(list) == T)
+    return NIL;
+  return cons(fn(car(list)), map1(fn, cdr(list)));
+}
+
+int32_t
+map2(int32_t (*fn)(int32_t, int32_t), int32_t list1, int32_t list2)
+{
+  TRACE();
+  int32_t a;
+  int32_t b;
+  if (nullp(list1) == T || nullp(list2) == T)
+    RETURN(NIL);
+  RETURN(cons(fn(car(list1), car(list2)), map2(fn, cdr(list1), cdr(list2))));
 }
 
 void
@@ -546,7 +704,7 @@ printrec(int32_t ptr)
 {
   TRACE();
   if (ptr == NIL) {
-    printf("NIL");
+    printf("nil");
     UNTRACE();
     return;
   }
@@ -562,17 +720,6 @@ printrec(int32_t ptr)
     default:
       break;
   }
-  /* if (ptr == NIL) { */
-  /*     printf("()"); */
-  /*     return; */
-  /* } */
-  /* if (ptr == T) { */
-  /*     printf("T"); */
-  /*     return; */
-  /* } */
-  /* if (type(ptr) == NUM) { */
-  /*     return; */
-  /* } */
   putchar('(');
   printrec(car(ptr));
   if (type(cdr(ptr)) == NUM) {
@@ -591,6 +738,8 @@ int32_t
 eql(int32_t a, int32_t b)
 {
   TRACE();
+  if (a == b)
+    RETURN(T);
   if (type(a) != type(b))
     RETURN(NIL);
   if (type(a) == NUM) {
@@ -603,8 +752,6 @@ eql(int32_t a, int32_t b)
       RETURN(T);
     return NIL;
   }
-  if (a == b)
-    RETURN(T);
   RETURN(NIL);
 }
 
@@ -612,7 +759,7 @@ int32_t
 nullp(int32_t ptr)
 {
   TRACE();
-  if (eql(ptr, NIL))
+  if (ptr == NIL)
     RETURN(T);
   RETURN(NIL);
 }
@@ -656,4 +803,14 @@ sum(int32_t list)
   if (nullp(list) == T)
     return num(0);
   return num(val(car(list)) + val(sum(cdr(list))));
+}
+
+int32_t
+symbolp(int32_t obj)
+{
+  if (obj == NIL || obj == T)
+    return T;
+  if (pool[obj].type == SYM)
+    return T;
+  return NIL;
 }
