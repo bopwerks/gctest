@@ -221,26 +221,31 @@ main(void)
   T = sym("t");
   env = cons(cons(NIL, NIL), cons(cons(T, T), NIL));
   /* print(env); */
-  regvar(&NIL);
-  regvar(&T);
-  regvar(&a);
-  regvar(&b);
-  regvar(&c);
-  regvar(&expr);
+  /* regvar(&NIL); */
+  /* regvar(&T); */
+  /* regvar(&a); */
+  /* regvar(&b); */
+  /* regvar(&c); */
+  /* regvar(&expr); */
+  regvar(&env);
   /* print(length(env)); */
-  a = cons(sym("a"), cons(sym("b"), cons(sym("c"), NIL)));
-  b = cons(num(1), cons(num(2), cons(num(3), NIL)));
+  /* a = cons(sym("a"), cons(sym("b"), cons(sym("c"), NIL))); */
+  /* b = cons(num(1), cons(num(2), cons(num(3), NIL))); */
   /* print(a); */
-  c = map2(cons, a, b);
+  /* c = map2(cons, a, b); */
   /* print(b); */
   /* print(assoc(sym("b"), c)); */
   /* print(append(a, b)); */
-  env = cons(cons(sym("x"), num(72)), env);
+  /* env = cons(cons(sym("x"), num(72)), env); */
   initread(stdin);
   while ((expr = read(stdin)) != EOF) {
+    /* puts("read an expr. evaluating..."); */
     expr = eval(expr, &env);
     if (expr != NIL)
       print(expr);
+    /* gc(); */
+    printstats();
+    /* puts("going into next loop"); */
     /* printf("Env after eval: "); */
     /* print(env); */
   }
@@ -331,6 +336,12 @@ bool(int val)
   return T;
 }
 
+int
+symcmp(int32_t sym, char *s)
+{
+  return strcmp(getsym(sym), s);
+}
+
 int32_t
 eval(int32_t expr, int32_t *env)
 {
@@ -354,68 +365,68 @@ eval(int32_t expr, int32_t *env)
   }
   if (atomp(expr) == T)
     RETURN(expr);
-  if (eql(first(expr), sym("env")))
+  if (symcmp(first(expr), "env") == 0)
     RETURN(*env);
-  if (eql(first(expr), sym("quote")))
+  if (symcmp(first(expr), "quote") == 0)
     RETURN(second(expr));
-  if (eql(first(expr), sym("nullp")))
+  if (symcmp(first(expr), "nullp") == 0)
     RETURN(nullp(eval(second(expr), env)));
-  if (eql(first(expr), sym("atomp")))
+  if (symcmp(first(expr), "atomp") == 0)
     RETURN(atomp(eval(second(expr), env)));
-  if (eql(first(expr), sym("lambda")))
+  if (symcmp(first(expr), "lambda") == 0)
     RETURN(expr);
-  if (eql(first(expr), sym("cons")))
+  if (symcmp(first(expr), "cons") == 0)
     RETURN(cons(eval(second(expr), env), eval(third(expr), env)));
-  if (eql(first(expr), sym("car")))
+  if (symcmp(first(expr), "car") == 0)
     RETURN(car(eval(second(expr), env)));
-  if (eql(first(expr), sym("cdr")))
+  if (symcmp(first(expr), "cdr") == 0)
     RETURN(cdr(eval(second(expr), env)));
-  if (eql(first(expr), sym("eql")))
+  if (symcmp(first(expr), "eql") == 0)
     RETURN(eql(eval(second(expr), env), eval(third(expr), env)));
-  if (eql(first(expr), sym(">")))
+  if (symcmp(first(expr), ">") == 0)
     RETURN(bool(val(eval(second(expr), env)) > val(eval(third(expr), env))));
-  if (eql(first(expr), sym(">=")))
+  if (symcmp(first(expr), ">=") == 0)
     RETURN(bool(val(eval(second(expr), env)) >= val(eval(third(expr), env))));
-  if (eql(first(expr), sym("<")))
+  if (symcmp(first(expr), "<") == 0)
     RETURN(bool(val(eval(second(expr), env)) < val(eval(third(expr), env))));
-  if (eql(first(expr), sym("<=")))
+  if (symcmp(first(expr), "<=") == 0)
     RETURN(bool(val(eval(second(expr), env)) <= val(eval(third(expr), env))));
-  if (eql(first(expr), sym("=")))
+  if (symcmp(first(expr), "=") == 0)
     RETURN(bool(val(eval(second(expr), env)) == val(eval(third(expr), env))));
-  if (eql(first(expr), sym("*")))
+  if (symcmp(first(expr), "*") == 0)
     RETURN(num(val(eval(second(expr), env)) * val(eval(third(expr), env))));
-  if (eql(first(expr), sym("+")))
+  if (symcmp(first(expr), "+") == 0)
     RETURN(num(val(eval(second(expr), env)) + val(eval(third(expr), env))));
-  if (eql(first(expr), sym("-")))
+  if (symcmp(first(expr), "-") == 0)
     RETURN(num(val(eval(second(expr), env)) - val(eval(third(expr), env))));
-  if (eql(first(expr), sym("or"))) {
+  if (symcmp(first(expr), "or") == 0) {
     assert(cdr(expr) != NIL);
     for (pair = cdr(expr); pair != NIL; pair = cdr(pair))
       if (eval(car(pair), env) == T)
         RETURN(T);
     RETURN(NIL);
   }
-  if (eql(first(expr), sym("and"))) {
+  if (symcmp(first(expr), "and") == 0) {
     assert(cdr(expr) != NIL);
     for (pair = cdr(expr); pair != NIL; pair = cdr(pair))
       if (eval(car(pair), env) == NIL)
         RETURN(NIL);
     RETURN(T);
   }
-  if (eql(first(expr), sym("not"))) {
+  if (symcmp(first(expr), "not") == 0) {
     assert(cdr(expr) != NIL);
     if (eval(second(expr), env) == NIL)
       RETURN(T);
     RETURN(NIL);
   }
-  if (eql(first(expr), sym("if"))) {
+  if (symcmp(first(expr), "if") == 0) {
     assert(cdr(expr) != NIL);
     if (eval(second(expr), env) == T)
       RETURN(eval(third(expr), env));
     else
       RETURN(eval(car(cdr(cdr(cdr(expr)))), env));
   }
-  if (eql(first(expr), sym("define"))) {
+  if (symcmp(first(expr), "define") == 0) {
     assert(cdr(expr) != NIL);
     *env = cons(cons(second(expr), eval(third(expr), env)), *env);
     RETURN(NIL);
@@ -684,15 +695,18 @@ int32_t
 getcell(void)
 {
   int32_t ptr;
-  if (avail == -1 && !gc())
-    return -1;
+  TRACE();
+  if (avail == -1 && !gc()) {
+    assert(0);
+    RETURN(-1);
+  }
   ptr = avail;
   avail = pool[ptr].cons.cdr;
   pool[ptr].cons.car = 0;
   pool[ptr].cons.cdr = 0;
   pool[ptr].marked = FALSE;
   --navail;
-  return ptr;
+  RETURN(ptr);
 }
 
 int32_t
@@ -777,7 +791,7 @@ mark(int32_t ptr)
   TRACE();
   LOG("Visiting cell %d... ", ptr);
   if (pool[ptr].marked) {
-    putchar('\n');
+    LOG("\n");
     return;
   }
   pool[ptr].marked = TRUE;
@@ -786,9 +800,9 @@ mark(int32_t ptr)
     UNTRACE();
     return;
   }
-  if (nullp(car(ptr)) != T)
+  if (car(ptr) != NIL)
     mark(car(ptr));
-  if (nullp(cdr(ptr)) != T)
+  if (cdr(ptr) != NIL)
     mark(cdr(ptr));
   UNTRACE();
 }
