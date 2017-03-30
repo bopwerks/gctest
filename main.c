@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifdef NDEBUG
+#ifndef NDEBUG
 
 static int NINDENT = 0;
 
@@ -52,7 +52,7 @@ static int NINDENT = 0;
 
 #define NELEM(a) (sizeof(a)/sizeof(a[0]))
 
-enum { MAXLEN = 10000 };
+enum { MAXLEN = 100 };
 
 enum Type { NUM, CONS, SYM };
 typedef enum Type Type;
@@ -139,7 +139,9 @@ static int peek = 0;
 void
 initread(FILE *fp)
 {
+  TRACE();
   peek = fgetc(fp);
+  UNTRACE();
 }
 
 int
@@ -178,32 +180,36 @@ addsym(char *s)
 int32_t
 pair(int32_t a, int32_t b)
 {
-  return cons(a, b);
+  TRACE();
+  RETURN(cons(a, b));
 }
 
 int32_t
 third(int32_t list)
 {
+  TRACE();
   assert(listp(list) == T);
   assert(cdr(list) != NIL);
   assert(cdr(cdr(list)) != NIL);
-  return car(cdr(cdr(list)));
+  RETURN(car(cdr(cdr(list))));
 }
 
 int32_t
 second(int32_t list)
 {
+  TRACE();
   assert(listp(list) == T);
   assert(cdr(list) != NIL);
-  return car(cdr(list));
+  RETURN(car(cdr(list)));
 }
 
 int32_t
 first(int32_t list)
 {
+  TRACE();
   assert(listp(list) == T);
   assert(list != NIL);
-  return car(list);
+  RETURN(car(list));
 }
 
 int
@@ -247,7 +253,7 @@ main(void)
     printstats();
     /* puts("going into next loop"); */
     /* printf("Env after eval: "); */
-    /* print(env); */
+    print(env);
   }
   /* print(eval(sym("dang6"), env)); */
   /* print(second(map2(cons, a, b))); */
@@ -331,15 +337,17 @@ assoc(int32_t key, int32_t alist)
 int32_t
 bool(int val)
 {
+  TRACE();
   if (val == 0)
-    return NIL;
-  return T;
+    RETURN(NIL);
+  RETURN(T);
 }
 
 int
 symcmp(int32_t sym, char *s)
 {
-  return strcmp(getsym(sym), s);
+  TRACE();
+  RETURN(strcmp(getsym(sym), s));
 }
 
 int32_t
@@ -446,6 +454,7 @@ apply(int32_t lambda, int32_t params, int32_t env)
   int32_t frame;
   int32_t pair;
   int32_t rval;
+  TRACE();
   /* printf("apply(): lambda = "); */
   /* print(lambda); */
   /* printf("second(lambda) = "); */
@@ -463,7 +472,7 @@ apply(int32_t lambda, int32_t params, int32_t env)
     /* print(car(pair)); */
     rval = eval(car(pair), &env);
   }
-  return rval;
+  RETURN(rval);
 }
 
 int32_t
@@ -482,17 +491,18 @@ int32_t
 map1(int32_t (*fn)(int32_t), int32_t list)
 {
   int32_t elt;
+  TRACE();
   if (nullp(list) == T)
-    return NIL;
-  return cons(fn(car(list)), map1(fn, cdr(list)));
+    RETURN(NIL);
+  RETURN(cons(fn(car(list)), map1(fn, cdr(list))));
 }
 
 int32_t
 map2(int32_t (*fn)(int32_t, int32_t), int32_t list1, int32_t list2)
 {
-  TRACE();
   int32_t a;
   int32_t b;
+  TRACE();
   if (nullp(list1) == T || nullp(list2) == T)
     RETURN(NIL);
   RETURN(cons(fn(car(list1), car(list2)), map2(fn, cdr(list1), cdr(list2))));
@@ -510,8 +520,8 @@ printstats(void)
 int32_t
 evenp(int32_t obj)
 {
-  assert(type(obj) == NUM);
   TRACE();
+  assert(type(obj) == NUM);
   RETURN(((val(obj) % 2) == 0) ? T : NIL);
 }
 
@@ -645,20 +655,21 @@ rfilter(int32_t (*fn)(int32_t), int32_t lst)
 {
   assert(type(lst) == CONS);
   if (nullp(lst) == T)
-    return NIL;
+    RETURN(NIL);
   if (atomp(car(lst)) == T) {
     if (fn(car(lst)) == T)
-      return cons(car(lst), rfilter(fn, cdr(lst)));
-    return rfilter(fn, cdr(lst));
+      RETURN(cons(car(lst), rfilter(fn, cdr(lst))));
+    RETURN(rfilter(fn, cdr(lst)));
   }
-  return cons(rfilter(fn, car(lst)),
-              rfilter(fn, cdr(lst)));
+  RETURN(cons(rfilter(fn, car(lst)),
+              rfilter(fn, cdr(lst))));
 }
 
 void
 initpool(void)
 {
   int32_t i;
+  TRACE();
   for (i = 0; i < NELEM(pool)-1; ++i) {
     pool[i].type = CONS;
     pool[i].cons.car = 0;
@@ -671,24 +682,28 @@ initpool(void)
   pool[i].marked = FALSE;
   avail = 0;
   navail = MAXLEN;
+  UNTRACE();
 }
 
 void
 regvar(int32_t *p)
 {
+  TRACE();
   vars[nvars++] = p;
+  UNTRACE();
 }
 
 int
 gc(void)
 {
   int32_t i;
+  TRACE();
   puts("Collecting garbage...");
   for (i = 0; i < nvars; ++i) {
     LOG("Starting from cell %d...\n", *vars[i]);
     mark(*vars[i]);
   }
-  return sweep();
+  RETURN(sweep());
 }
 
 int32_t
@@ -713,13 +728,14 @@ int32_t
 cons(int32_t a, int32_t b)
 {
   int32_t ptr;
+  TRACE();
   ptr = getcell();
   assert(ptr != -1);
   pool[ptr].cons.car = a;
   pool[ptr].cons.cdr = b;
   LOG("Allocating cons cell %d\n", ptr);
   /* print(ptr); */
-  return ptr;
+  RETURN(ptr);
 }
 
 int32_t
@@ -781,8 +797,9 @@ setcdr(int32_t ptr, int32_t val)
 int64_t
 val(int32_t ptr)
 {
+  TRACE();
   assert(type(ptr) == NUM);
-  return pool[ptr].num;
+  RETURN(pool[ptr].num);
 }
 
 void
@@ -792,6 +809,7 @@ mark(int32_t ptr)
   LOG("Visiting cell %d... ", ptr);
   if (pool[ptr].marked) {
     LOG("\n");
+    UNTRACE();
     return;
   }
   pool[ptr].marked = TRUE;
@@ -834,8 +852,9 @@ sweep(void)
 char *
 getsym(int32_t ptr)
 {
+  TRACE();
   assert(type(ptr) == SYM);
-  return symbols[pool[ptr].sym];
+  RETURN(symbols[pool[ptr].sym]);
 }
 
 void
@@ -894,7 +913,7 @@ eql(int32_t a, int32_t b)
     if (strcmp(getsym(a), getsym(b)) == 0)
       RETURN(T);
     /* puts("Returning NIL because symbols don't match"); */
-    return NIL;
+    RETURN(NIL);
   }
   /* puts("Returning NIL because something else"); */
   RETURN(NIL);
@@ -912,14 +931,15 @@ nullp(int32_t ptr)
 int32_t
 lremove(int32_t num, int32_t lst)
 {
+  TRACE();
   assert(type(num) == NUM);
   assert(type(lst) == CONS);
   if (nullp(lst) == T)
-    return NIL;
+    RETURN(NIL);
   else if (eql(num, car(lst)) == T)
-    return lremove(num, cdr(lst));
+    RETURN(lremove(num, cdr(lst)));
   else
-    return cons(car(lst), lremove(num, cdr(lst)));
+    RETURN(cons(car(lst), lremove(num, cdr(lst))));
 }
 
 void
@@ -934,28 +954,31 @@ print(int32_t ptr)
 int32_t
 seq(int32_t start, int32_t end)
 {
+  TRACE();
   assert(type(start) == NUM);
   assert(type(end) == NUM);
   if (val(start) >= val(end))
-    return NIL;
-  return cons(start, seq(num(val(start)+1), end));
+    RETURN(NIL);
+  RETURN(cons(start, seq(num(val(start)+1), end)));
 }
 
 int32_t
 sum(int32_t list)
 {
+  TRACE();
   assert(type(list) == CONS);
   if (nullp(list) == T)
-    return num(0);
-  return num(val(car(list)) + val(sum(cdr(list))));
+    RETURN(num(0));
+  RETURN(num(val(car(list)) + val(sum(cdr(list)))));
 }
 
 int32_t
 symbolp(int32_t obj)
 {
+  TRACE();
   if (obj == NIL || obj == T)
-    return T;
+    RETURN(T);
   if (pool[obj].type == SYM)
-    return T;
-  return NIL;
+    RETURN(T);
+  RETURN(NIL);
 }
