@@ -5,66 +5,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-
-#define NDEBUG
-#ifdef NDEBUG
-
-static int NINDENT = 0;
-
-#define TRACE() do {                                    \
-        int i;						\
-        for (i = 0; i < NINDENT; ++i)			\
-            fputc('.', stderr);                         \
-        fprintf(stderr, "Entered %s()\n", __func__);	\
-        NINDENT += 4;					\
-    } while (0)						\
-
-#define UNTRACE() do {                                  \
-        int i;						\
-        NINDENT -= 4;					\
-        for (i = 0; i < NINDENT; ++i)			\
-            fputc('.', stderr);                         \
-        fprintf(stderr, "Exiting %s()\n", __func__);	\
-    } while (0)						\
-
-#define RETURN(n) do {                                  \
-        int i;						\
-        NINDENT -= 4;					\
-        for (i = 0; i < NINDENT; ++i)			\
-            fputc('.', stderr);                         \
-        fprintf(stderr, "Exiting %s()\n", __func__);	\
-        return (n);					\
-    } while (0)						\
-
-#define LOG(...) do {				\
-        int i;                                  \
-        for (i = 0; i < NINDENT; ++i)           \
-            fputc('.', stderr);                 \
-        fprintf(stderr, __VA_ARGS__);           \
-    } while (0)
-
-#else
-
-#define TRACE()
-#define UNTRACE()
-#define RETURN(n) return n
-#define LOG(...)
-
-#endif
+#include "log.h"
 
 #define NELEM(a) (sizeof(a)/sizeof(a[0]))
 
-enum { MAXLEN = 20 };
+enum { MAXCELLS = 20 };
 
-enum Type { NUM, CONS, SYM };
-typedef enum Type Type;
+enum cell_type_t { NUM, CONS, SYM };
+typedef enum cell_type_t cell_type_t;
 
-static int32_t NIL;
-static int32_t T;
+static int32_t T = -1;
+static int32_t NIL = -2;
 
 enum { FALSE, TRUE };
 
-struct Cell {
+struct cell_t {
     union {
         struct {
             int32_t car;
@@ -73,25 +28,21 @@ struct Cell {
         int64_t num;
         char *sym;
     };
-    Type type;
+    cell_type_t type;
     char marked;
 };
-typedef struct Cell Cell;
+typedef struct cell_t cell_t;
 
-static Cell pool[MAXLEN];
+static cell_t cells[MAXCELLS];
 static int32_t avail = 0;
-static int32_t navail = MAXLEN;
+static int32_t navail = MAXCELLS;
 
-static char **symbols;
-static uint32_t nsymbols;
-static uint32_t maxsymbols;
-
-void initpool(void);
+void initcells(void);
 int gc(void);
 int32_t getcell(void);
 int32_t cons(int32_t a, int32_t b);
 int32_t num(int64_t n);
-Type type(int32_t ptr);
+cell_type_t type(int32_t ptr);
 int32_t car(int32_t ptr);
 void setcar(int32_t ptr, int32_t val);
 int32_t cdr(int32_t ptr);
@@ -137,20 +88,39 @@ void
 printmem(void)
 {
     int i;
-    int j;
-    for (i = 0; i < MAXLEN; ++i) {
-        printf("%d: ", i);
-        switch (pool[i].type) {
+    printf("+-----------------------+\n");
+    printf("|%11s|%11d|\n", "free head", avail);
+    printf("+-----------------------+\n");
+    printf("|%11s|%11d|\n", "free count", navail);
+    printf("+=======================+\n");
+    for (i = 0; i < MAXCELLS; ++i) {
+        printf("|%2d|", i);
+        switch (cells[i].type) {
         case NUM:
-            printf("NUM: %ld\n", pool[i].num);
+            printf("%6s|%13ld|\n", "number", cells[i].num);
             break;
         case SYM:
-            printf("SYM: %s\n", getsym(i));
+            printf("%6s|%13s|\n", "symbol", cells[i].sym);
             break;
         case CONS:
-            printf("CONS: %d / %d\n", pool[i].cons.car, pool[i].cons.cdr);
+            printf("%6s|", "cons");
+            if (cells[i].cons.car == NIL)
+                printf("%6s", "nil");
+            else if (cells[i].cons.car == T)
+                printf("%6s", "t");
+            else
+                printf("%6d", cells[i].cons.car);
+            printf("|");
+            if (cells[i].cons.cdr == NIL)
+                printf("%6s", "nil");
+            else if (cells[i].cons.cdr == T)
+                printf("%6s", "t");
+            else
+                printf("%6d", cells[i].cons.cdr);
+            printf("|\n");
             break;
         }
+        printf("+-----------------------+\n");
     }
 }
 
@@ -160,18 +130,6 @@ void
 initread(FILE *fp)
 {
     peek = fgetc(fp);
-}
-
-int
-initsym(void)
-{
-    TRACE();
-    symbols = malloc(sizeof *symbols * 1);
-    if (symbols == NULL)
-        RETURN(0);
-    nsymbols = 0;
-    maxsymbols = 1;
-    RETURN(1);
 }
 
 int32_t
@@ -202,26 +160,19 @@ first(int32_t list)
 int
 main(void)
 {
-    int32_t a;
-    int32_t b;
-    int32_t c;
     int32_t env;
     int32_t expr;
+    int32_t val;
     TRACE();
-    initpool();
-    initsym();
-    NIL = sym("nil");
-    T = sym("t");
-    env = cons(cons(NIL, NIL), cons(cons(T, T), NIL));
-    GC_PROTECT(env);
+    initcells();
+    env = NIL;
     printmem();
     initread(stdin);
     while ((expr = read(stdin)) != EOF) {
         GC_PROTECT(expr);
-        expr = eval(expr, &env);
+        val = eval(expr, &env);
         GC_UNPROTECT(expr);
-        if (expr != NIL)
-            print(expr);
+        print(val);
         printstats();
         printmem();
     }
@@ -231,7 +182,6 @@ main(void)
 int32_t
 append(int32_t list1, int32_t list2)
 {
-    int32_t pair;
     TRACE();
     assert(listp(list1) == T);
     assert(listp(list2) == T);
@@ -285,14 +235,10 @@ eval(int32_t expr, int32_t *env)
     int32_t func;
     int32_t pair;
     TRACE();
-    /* printf("eval env = "); */
-    /* print(*env); */
     if (expr == NIL || expr == T)
         RETURN(expr);
     if (symbolp(expr) == T) {
         rval = assoc(expr, *env);
-        /* printf("assoc on symbol: "); */
-        /* print(rval); */
         if (rval == NIL) {
             fprintf(stderr, "Error: Undefined symbol: %s\n", getsym(expr));
             RETURN(NIL);
@@ -363,8 +309,9 @@ eval(int32_t expr, int32_t *env)
             RETURN(eval(car(cdr(cdr(cdr(expr)))), env));
     }
     if (symcmp(first(expr), "define") == 0) {
+        LOG("GOT TO THE DEFINE!");
         assert(cdr(expr) != NIL);
-        *env = cons(cons(second(expr), eval(third(expr), env)), *env);
+        *env = cons(cons(second(expr), third(expr)), *env);
         RETURN(NIL);
     }
     func = assoc(first(expr), *env);
@@ -372,19 +319,21 @@ eval(int32_t expr, int32_t *env)
         fprintf(stderr, "Error: Undefined function: %s\n", getsym(first(expr)));
         return NIL;
     }
+    LOG("APPLYING!!!");
     RETURN(apply(cdr(car(func)), cdr(expr), *env));
 }
 
 int32_t
 apply(int32_t lambda, int32_t params, int32_t env)
 {
-    int32_t frame;
     int32_t pair;
     int32_t rval;
     assert(eql(length(second(lambda)), length(params)));
     /* push the values onto the environment alist as a stack */
     GC_PROTECT(env);
+    GC_PROTECT(params);
     env = append(map2(cons, second(lambda), mapenv(eval, params, env)), env);
+    GC_UNPROTECT(params);
     GC_UNPROTECT(env);
     /* printf("new env = "); */
     /* print(env); */
@@ -401,7 +350,6 @@ int32_t
 length(int32_t list)
 {
     int32_t len;
-    int32_t elt;
     TRACE();
     assert(listp(list) == T);
     for (len = 0; nullp(list) != T; ++len)
@@ -412,7 +360,6 @@ length(int32_t list)
 int32_t
 map1(int32_t (*fn)(int32_t), int32_t list)
 {
-    int32_t elt;
     if (nullp(list) == T)
         return NIL;
     return cons(fn(car(list)), map1(fn, cdr(list)));
@@ -422,8 +369,6 @@ int32_t
 map2(int32_t (*fn)(int32_t, int32_t), int32_t list1, int32_t list2)
 {
     TRACE();
-    int32_t a;
-    int32_t b;
     if (nullp(list1) == T || nullp(list2) == T)
         RETURN(NIL);
     RETURN(cons(fn(car(list1), car(list2)), map2(fn, cdr(list1), cdr(list2))));
@@ -434,14 +379,13 @@ printstats(void)
 {
     TRACE();
     printf("Used %d Free %d Total %d\n",
-           MAXLEN-navail, navail, MAXLEN);
+           MAXCELLS-navail, navail, MAXCELLS);
     UNTRACE();
 }
 
 int32_t
 readlist(FILE *fp)
 {
-    int ch;
     int32_t car;
     int32_t cdr;
     TRACE();
@@ -465,13 +409,11 @@ int32_t
 read(FILE *fp)
 {
     char buf[128];
-    int ch;
     int i, j;
     int32_t root;
-    int32_t elt;
     assert(fp != NULL);
     TRACE();
-    LOG("Starting on char '%c'\n", peek);
+    LOG("Starting on char '%c'", peek);
     while (isspace(peek))
         peek = fgetc(fp);
     if (peek == EOF) {
@@ -521,10 +463,11 @@ sym(char *s)
     int32_t ptr;
     TRACE();
     ptr = getcell();
-    assert(ptr != -1);
+    assert(ptr >= 0);
     LOG("Allocating symbol cell %d @ '%s\n", ptr, s);
-    pool[ptr].type = SYM;
-    pool[ptr].sym = strdup(s);
+    cells[ptr].type = SYM;
+    cells[ptr].sym = strdup(s);
+    printmem();
     RETURN(ptr);
 }
 
@@ -551,29 +494,28 @@ listp(int32_t obj)
 }
 
 void
-initpool(void)
+initcells(void)
 {
     int32_t i;
-    for (i = 0; i < NELEM(pool)-1; ++i) {
-        pool[i].type = CONS;
-        pool[i].cons.car = 0;
-        pool[i].cons.cdr = i+1;
-        pool[i].marked = FALSE;
+    for (i = 0; i < NELEM(cells)-1; ++i) {
+        cells[i].type = CONS;
+        cells[i].cons.car = 0;
+        cells[i].cons.cdr = i+1;
+        cells[i].marked = FALSE;
     }
-    pool[i].type = CONS;
-    pool[i].cons.car = 0;
-    pool[i].cons.cdr = -1;
-    pool[i].marked = FALSE;
+    cells[i].type = CONS;
+    cells[i].cons.car = 0;
+    cells[i].cons.cdr = NIL;
+    cells[i].marked = FALSE;
     avail = 0;
-    navail = MAXLEN;
+    navail = MAXCELLS;
 }
 
 int
 gc(void)
 {
     struct gc_stack_root *root;
-    int32_t i;
-    puts("Collecting garbage...");
+    LOG("Collecting garbage...");
     for (root = gc_roots; root; root = root->prev) {
         LOG("Starting from cell %d...\n", root->cell);
         mark(root->cell);
@@ -592,15 +534,15 @@ getcell(void)
 {
     int32_t ptr;
     TRACE();
-    if (avail == -1 && !gc()) {
+    if (avail == NIL && !gc()) {
         assert(0);
         RETURN(-1);
     }
     ptr = avail;
-    avail = pool[ptr].cons.cdr;
-    pool[ptr].cons.car = 0;
-    pool[ptr].cons.cdr = 0;
-    pool[ptr].marked = FALSE;
+    avail = cells[ptr].cons.cdr;
+    cells[ptr].cons.car = 0;
+    cells[ptr].cons.cdr = 0;
+    cells[ptr].marked = FALSE;
     --navail;
     RETURN(ptr);
 }
@@ -614,11 +556,11 @@ cons(int32_t a, int32_t b)
     ptr = getcell();
     GC_UNPROTECT(b);
     GC_UNPROTECT(a);
-    assert(ptr != -1);
-    pool[ptr].cons.car = a;
-    pool[ptr].cons.cdr = b;
+    assert(ptr != NIL);
+    cells[ptr].cons.car = a;
+    cells[ptr].cons.cdr = b;
     LOG("Allocating cons cell %d\n", ptr);
-    /* print(ptr); */
+    printmem();
     return ptr;
 }
 
@@ -628,18 +570,19 @@ num(int64_t n)
     int32_t ptr;
     TRACE();
     ptr = getcell();
-    assert(ptr != -1);
+    assert(ptr != NIL);
     LOG("Allocating number cell %d @ %ld\n", ptr, n);
-    pool[ptr].type = NUM;
-    pool[ptr].num = n;
+    cells[ptr].type = NUM;
+    cells[ptr].num = n;
+    printmem();
     RETURN(ptr);
 }
 
-Type
+cell_type_t
 type(int32_t ptr)
 {
     TRACE();
-    RETURN(pool[ptr].type);
+    RETURN(cells[ptr].type);
 }
 
 int32_t
@@ -647,7 +590,7 @@ car(int32_t ptr)
 {
     TRACE();
     assert(type(ptr) == CONS);
-    RETURN(pool[ptr].cons.car);
+    RETURN(cells[ptr].cons.car);
 }
 
 void
@@ -655,7 +598,7 @@ setcar(int32_t ptr, int32_t val)
 {
     TRACE();
     assert(type(ptr) == CONS);
-    pool[ptr].cons.car = val;
+    cells[ptr].cons.car = val;
     UNTRACE();
 }
 
@@ -664,7 +607,7 @@ cdr(int32_t ptr)
 {
     TRACE();
     assert(type(ptr) == CONS);
-    RETURN(pool[ptr].cons.cdr);
+    RETURN(cells[ptr].cons.cdr);
 }
 
 void
@@ -672,7 +615,7 @@ setcdr(int32_t ptr, int32_t val)
 {
     TRACE();
     assert(type(ptr) == CONS);
-    pool[ptr].cons.cdr = val;
+    cells[ptr].cons.cdr = val;
     UNTRACE();
 }
 
@@ -680,7 +623,7 @@ int64_t
 val(int32_t ptr)
 {
     assert(type(ptr) == NUM);
-    return pool[ptr].num;
+    return cells[ptr].num;
 }
 
 void
@@ -688,11 +631,11 @@ mark(int32_t ptr)
 {
     TRACE();
     LOG("Visiting cell %d... ", ptr);
-    if (pool[ptr].marked) {
+    if (cells[ptr].marked) {
         LOG("\n");
         return;
     }
-    pool[ptr].marked = TRUE;
+    cells[ptr].marked = TRUE;
     LOG("MARKED\n");
     if (type(ptr) != CONS) {
         UNTRACE();
@@ -711,20 +654,20 @@ sweep(void)
     int32_t i;
     int32_t nmarked;
     TRACE();
-    avail = -1;
+    avail = NIL;
     LOG("Sweeping...");
-    for (i = nmarked = 0; i < NELEM(pool); ++i) {
-        if (!pool[i].marked) {
-            LOG("Reclaiming cell %d\n", i);
-            pool[i].type = CONS;
-            pool[i].cons.car = NIL;
-            pool[i].cons.cdr = avail;
+    for (i = nmarked = 0; i < NELEM(cells); ++i) {
+        if (!cells[i].marked) {
+            LOG("Reclaiming cell %d", i);
+            cells[i].type = CONS;
+            cells[i].cons.car = NIL;
+            cells[i].cons.cdr = avail;
             avail = i;
         } else
             ++nmarked;
-        pool[i].marked = FALSE;
+        cells[i].marked = FALSE;
     }
-    navail = MAXLEN - nmarked;
+    navail = MAXCELLS - nmarked;
     LOG("%d cells free\n", navail);
     RETURN(navail);
 }
@@ -733,7 +676,7 @@ char *
 getsym(int32_t ptr)
 {
     assert(type(ptr) == SYM);
-    return pool[ptr].sym;
+    return cells[ptr].sym;
 }
 
 void
@@ -778,23 +721,18 @@ eql(int32_t a, int32_t b)
     if (a == b)
         RETURN(T);
     if (type(a) != type(b)) {
-        /* puts("Returning NIL because types differ"); */
-        /* printf("Type A = %d B = %d\n", type(a), type(b)); */
         RETURN(NIL);
     }
     if (type(a) == NUM) {
         if (val(a) == val(b))
             RETURN(T);
-        /* puts("Returning NIL because numeric values differ"); */
         RETURN(NIL);
     }
     if (type(a) == SYM) {
         if (strcmp(getsym(a), getsym(b)) == 0)
             RETURN(T);
-        /* puts("Returning NIL because symbols don't match"); */
         return NIL;
     }
-    /* puts("Returning NIL because something else"); */
     RETURN(NIL);
 }
 
@@ -819,5 +757,5 @@ print(int32_t ptr)
 int32_t
 symbolp(int32_t obj)
 {
-    return pool[obj].type != CONS && pool[obj].type != NUM;
+    return cells[obj].type != CONS && cells[obj].type != NUM;
 }

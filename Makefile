@@ -1,10 +1,11 @@
 SHELL = sh
-CFLAGS = 
+CFLAGS = -g -pedantic -Wall -Werror
 
-gctest: main.o
-	$(CC) -o $@ $^ -lm
+gctest: main.o log.o
+	$(CC) -o $@ $^
 
 main.o: main.c
+log.o: log.c
 
 .PHONY: clean
 clean:
