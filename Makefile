@@ -2,7 +2,7 @@ SHELL = sh
 CFLAGS = 
 
 gctest: main.o
-	$(CC) -o $@ $^
+	$(CC) -o $@ $^ -lm
 
 main.o: main.c
 
