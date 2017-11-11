@@ -10,7 +10,7 @@
 
 #define NELEM(a) (sizeof(a)/sizeof(a[0]))
 
-enum { MAXCELLS = 1000 };
+enum { MAXCELLS = 200 };
 
 static int32_t T = -1;
 static int32_t NIL = -2;
@@ -126,13 +126,16 @@ printmem(void)
         printf("|%2d|", i);
         switch (cells[i].type) {
         case LAMBDA:
-            printf("%6s|%6d|%6d|\n", "lambda", cells[i].proc.body, cells[i].proc.env);
+            printf("%6s|%6d|%6d| ", "lambda", cells[i].proc.body, cells[i].proc.env);
+//            print(i);
             break;
         case NUMBER:
-            printf("%6s|%13ld|\n", "number", cells[i].num);
+            printf("%6s|%13ld| ", "number", cells[i].num);
+//            print(i);
             break;
         case SYMBOL:
-            printf("%6s|%13s|\n", "symbol", cells[i].sym);
+            printf("%6s|%13s| ", "symbol", cells[i].sym);
+//            print(i);
             break;
         case CONS:
             printf("%6s|", "cons");
@@ -150,6 +153,10 @@ printmem(void)
             else
                 printf("%6d", cells[i].cons.cdr);
             printf("|\n");
+//            if (cells[i].cons.car != NIL)
+//                print(i);
+//            else
+//                putchar('\n');
             break;
         }
         if (i < MAXCELLS-1) {
@@ -271,6 +278,9 @@ assoc(int32_t key, int32_t alist)
 {
     TRACE();
     assert(listp(alist) == T);
+    if (car(alist) == NIL) {
+        return NIL;
+    }
     for ( ; alist != NIL; alist = cdr(alist)) {
         if (cells[car(car(alist))].sym == cells[key].sym)
             RETURN(alist);
@@ -301,6 +311,7 @@ eval(int32_t expr, int32_t env)
     int32_t pair;
     int32_t proc;
     int32_t name;
+    int32_t binding;
     int foundp;
     TRACE();
 //    print(expr);
@@ -312,7 +323,7 @@ eval(int32_t expr, int32_t env)
             fprintf(stderr, "Error: Undefined symbol: %s\n", getsym(expr));
             RETURN(NIL);
         }
-        RETURN(rval);
+        RETURN(cdr(rval));
     }
     if (atomp(expr) == T)
         RETURN(expr);
@@ -357,6 +368,21 @@ eval(int32_t expr, int32_t env)
             if (eval(car(pair), env) == T)
                 RETURN(T);
         RETURN(NIL);
+    }
+    if (symcmp(name, "set!") == 0) {
+        assert(cells[second(expr)].type == SYMBOL);
+//        printf("set! env: ");
+//        print(env);
+        binding = lookup(second(expr), env, &foundp);
+//        printf("set! binding: ");
+//        print(binding);
+        rval = eval(third(expr), env);
+        if (!foundp) {
+            add_to_env(env, second(expr), rval);
+        } else {
+            setcdr(binding, rval);
+        }
+        RETURN(rval);
     }
     if (symcmp(name, "and") == 0) {
         assert(cdr(expr) != NIL);
@@ -403,7 +429,7 @@ eval(int32_t expr, int32_t env)
     }
 //    printf("Found function for symbol %s: ", getsym(name));
 //    print(proc);
-    RETURN(apply(proc, cdr(expr), env));
+    RETURN(apply(cdr(proc), cdr(expr), env));
 }
 
 int32_t
@@ -420,7 +446,7 @@ lookup(int32_t name, int32_t env, int *foundp)
             if (foundp) {
                 *foundp = 1;
             }
-            RETURN(cdr(car(binding)));
+            RETURN(car(binding));
         }
     }
     RETURN(NIL);
@@ -439,7 +465,12 @@ apply(int32_t proc, int32_t args, int32_t env)
     TRACE();
 //    print(proc);
     body = cells[proc].proc.body;
-    frame = make_env(env);
+    GC_PROTECT(env);
+//    printf("Env: ");
+//    print(env);
+//    printf("Body: ");
+//    print(body);
+    frame = make_env(cells[proc].proc.env);
     GC_PROTECT(frame);
     GC_PROTECT(args);
 //    printf("Raw args: ");
@@ -457,6 +488,7 @@ apply(int32_t proc, int32_t args, int32_t env)
     GC_UNPROTECT(cooked_args);
     GC_UNPROTECT(args);
     GC_UNPROTECT(frame);
+    GC_UNPROTECT(env);
     RETURN(rval);
 }
 
@@ -620,12 +652,12 @@ initcells(void)
     int32_t i;
     for (i = 0; i < NELEM(cells)-1; ++i) {
         cells[i].type = CONS;
-        cells[i].cons.car = 0;
+        cells[i].cons.car = NIL;
         cells[i].cons.cdr = i+1;
         cells[i].marked = FALSE;
     }
     cells[i].type = CONS;
-    cells[i].cons.car = 0;
+    cells[i].cons.car = NIL;
     cells[i].cons.cdr = NIL;
     cells[i].marked = FALSE;
     avail = 0;

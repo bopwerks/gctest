@@ -1,5 +1,6 @@
-(define square (lambda (x) (* x x)))
-(square 5)
-(square 5)
-(square 5)
-(square 5)
+(define make-withdraw
+  (lambda (balance)
+    (lambda (n) (set! balance (- balance n)))))
+(define w (make-withdraw 400))
+(w 5)
+(w 5)
