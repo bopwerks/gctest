@@ -15,8 +15,8 @@ extern void log_msg    (const char *fmt, ...);
 
 #else
 
-#define TRACE
-#define UNTRACE
+#define TRACE()
+#define UNTRACE()
 #define RETURN(n) return (n)
 #define LOG(...)
 
