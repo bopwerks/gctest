@@ -1,0 +1,6 @@
+(set! x 5)
+(define square (lambda (x) (* x x)))
+(square 5)
+(square 5)
+(square 5)
+(square 5)
