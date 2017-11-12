@@ -226,9 +226,13 @@ main(void)
 {
     int32_t expr;
     int32_t val;
+
+    (void) val;
     TRACE();
     initcells();
     env = make_env(NIL);
+    add_to_env(env, sym("t"), T);
+    add_to_env(env, sym("nil"), NIL);
     GC_PROTECT(env);
 //    printmem();
     initread(stdin);
@@ -313,10 +317,10 @@ eval(int32_t expr, int32_t env)
     int32_t name;
     int32_t binding;
     int foundp;
+    int32_t args, body;
     TRACE();
+//    printf("Evaluating ");
 //    print(expr);
-    if (expr == NIL || expr == T)
-        RETURN(expr);
     if (symbolp(expr) == T) {
         rval = lookup(expr, env, &foundp);
         if (!foundp) {
@@ -336,8 +340,19 @@ eval(int32_t expr, int32_t env)
         RETURN(nullp(eval(second(expr), env)));
     if (symcmp(name, "atomp") == 0)
         RETURN(atomp(eval(second(expr), env)));
-    if (symcmp(name, "lambda") == 0)
-        RETURN(make_proc(expr, env));
+    if (symcmp(name, "lambda") == 0) {
+//        printf("Making a lambda\n");
+//        printf("body: ");
+//        print(cdr(expr));
+        RETURN(make_proc(cdr(expr), env));
+    }
+    if (symcmp(name, "print") == 0) {
+        print(eval(second(expr), env));
+        RETURN(NIL);
+    }
+    if (symcmp(name, "read") == 0) {
+        RETURN(read(stdin));
+    }
     if (symcmp(name, "cons") == 0)
         RETURN(cons(eval(second(expr), env), eval(third(expr), env)));
     if (symcmp(name, "car") == 0)
@@ -401,14 +416,30 @@ eval(int32_t expr, int32_t env)
         assert(cdr(expr) != NIL);
         if (eval(second(expr), env) == T)
             RETURN(eval(third(expr), env));
-        else
+        else if (length(expr) == 4) {
             RETURN(eval(car(cdr(cdr(cdr(expr)))), env));
+        }
     }
     if (symcmp(name, "define") == 0) {
-        LOG("GOT TO THE DEFINE!");
         assert(cdr(expr) != NIL);
-        proc = eval(third(expr), env);
-        name = second(expr);
+        if (cells[second(expr)].type == CONS) {
+//            printf("Using syntax sugar\n");
+            name = car(second(expr));
+            args = cdr(second(expr));
+            body = cdr(cdr(expr));
+            proc = make_proc(cons(args, body), env);
+//            printf("Made procedure ");
+//            print(proc);
+        } else {
+            name = second(expr);
+//            printf("Name of object ");
+//            print(name);
+//            printf("Thing to evaluate ");
+//            print(third(expr));
+            proc = eval(third(expr), env);
+//            printf("Value returned ");
+//            print(proc);
+        }
 //        puts("NAME");
 //        print(name);
 //        puts("PROC");
@@ -422,6 +453,11 @@ eval(int32_t expr, int32_t env)
 //    LOG("CAR ENV");
 //    print(env);
 //    print(car(env));
+//    printf("Looking up procedure\n");
+//    printf("Name: ");
+//    print(name);
+//    printf("Env: ");
+//    print(env);
     proc = lookup(name, env, &foundp);
     if (!foundp) {
         fprintf(stderr, "Error: Undefined function: %s\n", getsym(name));
@@ -429,6 +465,11 @@ eval(int32_t expr, int32_t env)
     }
 //    printf("Found function for symbol %s: ", getsym(name));
 //    print(proc);
+//    printf("Applying ");
+//    printf("Proc: ");
+//    print(cdr(proc));
+//    printf("Args: ");
+//    print(cdr(expr));
     RETURN(apply(cdr(proc), cdr(expr), env));
 }
 
@@ -463,6 +504,7 @@ apply(int32_t proc, int32_t args, int32_t env)
     //assert(eql(length(second(lambda)), length(params)));
     /* push the values onto the environment alist as a stack */
     TRACE();
+//    printf("APPLY\n");
 //    print(proc);
     body = cells[proc].proc.body;
     GC_PROTECT(env);
@@ -475,14 +517,16 @@ apply(int32_t proc, int32_t args, int32_t env)
     GC_PROTECT(args);
 //    printf("Raw args: ");
 //    print(args);
-    cooked_args = zip(cons, second(body), mapenv(eval, args, env));
+    cooked_args = zip(cons, car(body), mapenv(eval, args, env));
     GC_PROTECT(cooked_args);
 //    printf("Cooked args: ");
 //    print(cooked_args);
     setcar(frame, cooked_args);
 //    printf("Apply frame: ");
 //    print(frame);
-    for (expr = cdr(cdr(body)); expr != NIL; expr = cdr(expr)) {
+    for (expr = cdr(body); expr != NIL; expr = cdr(expr)) {
+//        printf("Evaluating ");
+//        print(car(expr));
         rval = eval(car(expr), frame);
     }
     GC_UNPROTECT(cooked_args);
@@ -600,10 +644,12 @@ read(FILE *fp)
             while (peek != EOF && isalnum(peek))
                 peek = fgetc(fp);
         }
+        /*
         if (strcmp(buf, "nil") == 0)
             RETURN(NIL);
         if (strcmp(buf, "t") == 0)
             RETURN(T);
+        */
         root = sym(buf);
         /* printf("Returning symbol cell %d @ '%s\n", root, buf); */
         RETURN(root);

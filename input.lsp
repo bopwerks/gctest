@@ -1,6 +1,12 @@
-(define make-withdraw
-  (lambda (balance)
-    (lambda (n) (set! balance (- balance n)))))
-(define w (make-withdraw 400))
-(w 5)
-(w 5)
+(define (make-person name)
+  (define (get-name)
+    name)
+  (define (dispatch msg)
+    (if (eql msg (quote name))
+        get-name))
+  dispatch)
+
+(define p (make-person (quote jesse)))
+(define (name person)
+  ((person (quote name))))
+(name p)
