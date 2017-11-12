@@ -319,7 +319,7 @@ eval(int32_t expr, int32_t env)
     int foundp;
     int32_t args, body;
     TRACE();
-//    printf("Evaluating ");
+//    printf("EVAL ");
 //    print(expr);
     if (symbolp(expr) == T) {
         rval = lookup(expr, env, &foundp);
@@ -331,124 +331,127 @@ eval(int32_t expr, int32_t env)
     }
     if (atomp(expr) == T)
         RETURN(expr);
-    name = first(expr);
-    if (symcmp(name, "env") == 0)
-        RETURN(env);
-    if (symcmp(name, "quote") == 0)
-        RETURN(second(expr));
-    if (symcmp(name, "nullp") == 0)
-        RETURN(nullp(eval(second(expr), env)));
-    if (symcmp(name, "atomp") == 0)
-        RETURN(atomp(eval(second(expr), env)));
-    if (symcmp(name, "lambda") == 0) {
+    if (symbolp(car(expr)) == T) {
+        name = car(expr);
+        if (symcmp(name, "env") == 0)
+            RETURN(env);
+        if (symcmp(name, "quote") == 0)
+            RETURN(second(expr));
+        if (symcmp(name, "nullp") == 0)
+            RETURN(nullp(eval(second(expr), env)));
+        if (symcmp(name, "atomp") == 0)
+            RETURN(atomp(eval(second(expr), env)));
+        if (symcmp(name, "lambda") == 0) {
 //        printf("Making a lambda\n");
 //        printf("body: ");
 //        print(cdr(expr));
-        RETURN(make_proc(cdr(expr), env));
-    }
-    if (symcmp(name, "print") == 0) {
-        print(eval(second(expr), env));
-        RETURN(NIL);
-    }
-    if (symcmp(name, "read") == 0) {
-        RETURN(read(stdin));
-    }
-    if (symcmp(name, "cons") == 0)
-        RETURN(cons(eval(second(expr), env), eval(third(expr), env)));
-    if (symcmp(name, "car") == 0)
-        RETURN(car(eval(second(expr), env)));
-    if (symcmp(name, "cdr") == 0)
-        RETURN(cdr(eval(second(expr), env)));
-    if (symcmp(name, "eql") == 0)
-        RETURN(eql(eval(second(expr), env), eval(third(expr), env)));
-    if (symcmp(name, ">") == 0)
-        RETURN(bool(val(eval(second(expr), env)) > val(eval(third(expr), env))));
-    if (symcmp(name, ">=") == 0)
-        RETURN(bool(val(eval(second(expr), env)) >= val(eval(third(expr), env))));
-    if (symcmp(name, "<") == 0)
-        RETURN(bool(val(eval(second(expr), env)) < val(eval(third(expr), env))));
-    if (symcmp(name, "<=") == 0)
-        RETURN(bool(val(eval(second(expr), env)) <= val(eval(third(expr), env))));
-    if (symcmp(name, "=") == 0)
-        RETURN(bool(val(eval(second(expr), env)) == val(eval(third(expr), env))));
-    if (symcmp(name, "*") == 0)
-        RETURN(num(val(eval(second(expr), env)) * val(eval(third(expr), env))));
-    if (symcmp(name, "+") == 0)
-        RETURN(num(val(eval(second(expr), env)) + val(eval(third(expr), env))));
-    if (symcmp(name, "-") == 0)
-        RETURN(num(val(eval(second(expr), env)) - val(eval(third(expr), env))));
-    if (symcmp(name, "or") == 0) {
-        assert(cdr(expr) != NIL);
-        for (pair = cdr(expr); pair != NIL; pair = cdr(pair))
-            if (eval(car(pair), env) == T)
-                RETURN(T);
-        RETURN(NIL);
-    }
-    if (symcmp(name, "set!") == 0) {
-        assert(cells[second(expr)].type == SYMBOL);
+            RETURN(make_proc(cdr(expr), env));
+        }
+        if (symcmp(name, "print") == 0) {
+            print(eval(second(expr), env));
+            RETURN(NIL);
+        }
+        if (symcmp(name, "read") == 0) {
+            RETURN(read(stdin));
+        }
+        if (symcmp(name, "cons") == 0)
+            RETURN(cons(eval(second(expr), env), eval(third(expr), env)));
+        if (symcmp(name, "car") == 0)
+            RETURN(car(eval(second(expr), env)));
+        if (symcmp(name, "cdr") == 0)
+            RETURN(cdr(eval(second(expr), env)));
+        if (symcmp(name, "eql") == 0)
+            RETURN(eql(eval(second(expr), env), eval(third(expr), env)));
+        if (symcmp(name, ">") == 0)
+            RETURN(bool(val(eval(second(expr), env)) > val(eval(third(expr), env))));
+        if (symcmp(name, ">=") == 0)
+            RETURN(bool(val(eval(second(expr), env)) >= val(eval(third(expr), env))));
+        if (symcmp(name, "<") == 0)
+            RETURN(bool(val(eval(second(expr), env)) < val(eval(third(expr), env))));
+        if (symcmp(name, "<=") == 0)
+            RETURN(bool(val(eval(second(expr), env)) <= val(eval(third(expr), env))));
+        if (symcmp(name, "=") == 0)
+            RETURN(bool(val(eval(second(expr), env)) == val(eval(third(expr), env))));
+        if (symcmp(name, "*") == 0)
+            RETURN(num(val(eval(second(expr), env)) * val(eval(third(expr), env))));
+        if (symcmp(name, "+") == 0)
+            RETURN(num(val(eval(second(expr), env)) + val(eval(third(expr), env))));
+        if (symcmp(name, "-") == 0)
+            RETURN(num(val(eval(second(expr), env)) - val(eval(third(expr), env))));
+        if (symcmp(name, "or") == 0) {
+            assert(cdr(expr) != NIL);
+            for (pair = cdr(expr); pair != NIL; pair = cdr(pair))
+                if (eval(car(pair), env) == T)
+                    RETURN(T);
+            RETURN(NIL);
+        }
+        if (symcmp(name, "set!") == 0) {
+            assert(cells[second(expr)].type == SYMBOL);
 //        printf("set! env: ");
 //        print(env);
-        binding = lookup(second(expr), env, &foundp);
+            binding = lookup(second(expr), env, &foundp);
 //        printf("set! binding: ");
 //        print(binding);
-        rval = eval(third(expr), env);
-        if (!foundp) {
-            add_to_env(env, second(expr), rval);
-        } else {
-            setcdr(binding, rval);
+            rval = eval(third(expr), env);
+            if (!foundp) {
+                add_to_env(env, second(expr), rval);
+            } else {
+                setcdr(binding, rval);
+            }
+            RETURN(rval);
         }
-        RETURN(rval);
-    }
-    if (symcmp(name, "and") == 0) {
-        assert(cdr(expr) != NIL);
-        for (pair = cdr(expr); pair != NIL; pair = cdr(pair))
-            if (eval(car(pair), env) == NIL)
-                RETURN(NIL);
-        RETURN(T);
-    }
-    if (symcmp(name, "not") == 0) {
-        assert(cdr(expr) != NIL);
-        if (eval(second(expr), env) == NIL)
+        if (symcmp(name, "and") == 0) {
+            assert(cdr(expr) != NIL);
+            for (pair = cdr(expr); pair != NIL; pair = cdr(pair))
+                if (eval(car(pair), env) == NIL)
+                    RETURN(NIL);
             RETURN(T);
-        RETURN(NIL);
-    }
-    if (symcmp(name, "if") == 0) {
-        assert(cdr(expr) != NIL);
-        if (eval(second(expr), env) == T)
-            RETURN(eval(third(expr), env));
-        else if (length(expr) == 4) {
-            RETURN(eval(car(cdr(cdr(cdr(expr)))), env));
         }
-    }
-    if (symcmp(name, "define") == 0) {
-        assert(cdr(expr) != NIL);
-        if (cells[second(expr)].type == CONS) {
-//            printf("Using syntax sugar\n");
-            name = car(second(expr));
-            args = cdr(second(expr));
-            body = cdr(cdr(expr));
-            proc = make_proc(cons(args, body), env);
+        if (symcmp(name, "not") == 0) {
+            assert(cdr(expr) != NIL);
+            if (eval(second(expr), env) == NIL)
+                RETURN(T);
+            RETURN(NIL);
+        }
+        if (symcmp(name, "if") == 0) {
+            assert(cdr(expr) != NIL);
+            if (eval(second(expr), env) == T)
+                RETURN(eval(third(expr), env));
+            else if (length(expr) == 4) {
+                RETURN(eval(car(cdr(cdr(cdr(expr)))), env));
+            }
+        }
+        if (symcmp(name, "define") == 0) {
+            assert(cdr(expr) != NIL);
+            if (cells[second(expr)].type == CONS) {
+//                printf("Using syntax sugar\n");
+                name = car(second(expr));
+                args = cdr(second(expr));
+                body = cdr(cdr(expr));
+                proc = make_proc(cons(args, body), env);
 //            printf("Made procedure ");
 //            print(proc);
-        } else {
-            name = second(expr);
+//            printf("Proc body: ");
+//            print(cells[proc].proc.body);
+            } else {
+                name = second(expr);
 //            printf("Name of object ");
 //            print(name);
 //            printf("Thing to evaluate ");
 //            print(third(expr));
-            proc = eval(third(expr), env);
+                proc = eval(third(expr), env);
 //            printf("Value returned ");
 //            print(proc);
-        }
+            }
 //        puts("NAME");
 //        print(name);
 //        puts("PROC");
 //        print(proc);
-        add_to_env(env, name, proc);
+            add_to_env(env, name, proc);
 //        puts("CAR ENV");
 //        print(car(env));
-        RETURN(proc);
-    }
+            RETURN(proc);
+        }
 //    LOG("APPLYING!!!");
 //    LOG("CAR ENV");
 //    print(env);
@@ -458,10 +461,16 @@ eval(int32_t expr, int32_t env)
 //    print(name);
 //    printf("Env: ");
 //    print(env);
-    proc = lookup(name, env, &foundp);
-    if (!foundp) {
-        fprintf(stderr, "Error: Undefined function: %s\n", getsym(name));
-        RETURN(NIL);
+        proc = lookup(name, env, &foundp);
+        if (!foundp) {
+            fprintf(stderr, "Error: Undefined function: %s\n", getsym(name));
+            RETURN(NIL);
+        }
+        RETURN(apply(cdr(proc), cdr(expr), env));
+    } else {
+//        printf("Procedure is a compound expression");
+        proc = eval(car(expr), env);
+        RETURN(apply(proc, cdr(expr), env));
     }
 //    printf("Found function for symbol %s: ", getsym(name));
 //    print(proc);
@@ -470,7 +479,7 @@ eval(int32_t expr, int32_t env)
 //    print(cdr(proc));
 //    printf("Args: ");
 //    print(cdr(expr));
-    RETURN(apply(cdr(proc), cdr(expr), env));
+    //RETURN(apply(cdr(proc), cdr(expr), env));
 }
 
 int32_t
@@ -645,10 +654,10 @@ read(FILE *fp)
                 peek = fgetc(fp);
         }
         /*
-        if (strcmp(buf, "nil") == 0)
-            RETURN(NIL);
-        if (strcmp(buf, "t") == 0)
-            RETURN(T);
+          if (strcmp(buf, "nil") == 0)
+          RETURN(NIL);
+          if (strcmp(buf, "t") == 0)
+          RETURN(T);
         */
         root = sym(buf);
         /* printf("Returning symbol cell %d @ '%s\n", root, buf); */

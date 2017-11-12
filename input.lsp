@@ -7,6 +7,8 @@
   dispatch)
 
 (define p (make-person (quote jesse)))
+(print (quote (after defining person)))
+p
 (define (name person)
   ((person (quote name))))
 (name p)
